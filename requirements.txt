@@ -1,0 +1,17 @@
+# Starship Duel — runtime dependencies
+# Core simulator (starship_duel/game, env, bots) needs NONE of these; it is
+# pure stdlib.  These enable the web UI and the RL adapters.
+
+# --- web interface (starship_duel/web) ---
+fastapi>=0.139
+uvicorn[standard]>=0.50
+
+# --- RL adapters (starship_duel/rl) ---
+numpy>=2.0
+gymnasium>=1.0
+pettingzoo>=1.25
+torch>=2.6
+
+# --- dev ---
+pytest>=8.0
+httpx>=0.27      # fastapi TestClient (web API tests)

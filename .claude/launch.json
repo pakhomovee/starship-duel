@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "starship-duel-web",
+      "runtimeExecutable": ".venv/bin/uvicorn",
+      "runtimeArgs": ["starship_duel.web.server:app", "--host", "127.0.0.1", "--port", "8000"],
+      "port": 8000
+    }
+  ]
+}

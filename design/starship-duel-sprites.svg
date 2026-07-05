@@ -1,0 +1,279 @@
+<?xml version="1.0"?>
+
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+
+
+<symbol id="deco-star-4" viewBox="0 0 24 24"><path d="M12 1 L14 9 L23 12 L14 15 L12 23 L10 15 L1 12 L10 9 Z" fill="#fff4e2"></path></symbol>
+<symbol id="deco-star-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="#fff4e2"></circle></symbol>
+<symbol id="deco-sparkle" viewBox="0 0 24 24"><path d="M12 2 L13.4 10.6 L22 12 L13.4 13.4 L12 22 L10.6 13.4 L2 12 L10.6 10.6 Z" fill="#8bf0ff"></path></symbol>
+<symbol id="deco-planet" viewBox="0 0 64 64">
+  <circle cx="30" cy="32" r="18" fill="#8b7bff" stroke="#2b1a4a" stroke-width="4"></circle>
+  <path d="M22 26 a8 5 0 0 1 12 -2" fill="none" stroke="#c9beff" stroke-width="3.5" stroke-linecap="round"></path>
+  <ellipse cx="32" cy="34" rx="30" ry="9" fill="none" stroke="#ffcf5c" stroke-width="4" transform="rotate(-18 32 34)"></ellipse>
+</symbol>
+<symbol id="deco-comet" viewBox="0 0 64 64">
+  <path d="M52 14 L20 40" stroke="#5ce0ff" stroke-width="7" stroke-linecap="round" opacity="0.35"></path>
+  <path d="M52 14 L28 34" stroke="#8bf0ff" stroke-width="4" stroke-linecap="round" opacity="0.7"></path>
+  <circle cx="52" cy="14" r="7" fill="#fff4e2" stroke="#2b1a4a" stroke-width="3"></circle>
+</symbol>
+<symbol id="deco-nebula" viewBox="0 0 120 80">
+  <ellipse cx="50" cy="42" rx="46" ry="30" fill="#7b3cd6" opacity="0.5"></ellipse>
+  <ellipse cx="78" cy="34" rx="34" ry="24" fill="#5ce0ff" opacity="0.22"></ellipse>
+  <ellipse cx="40" cy="52" rx="30" ry="18" fill="#ff6bb0" opacity="0.18"></ellipse>
+</symbol>
+
+
+
+<symbol id="sys-single-stable" viewBox="0 0 160 160">
+  <circle cx="80" cy="80" r="70" fill="none" stroke="#8b7bff" stroke-width="3" stroke-dasharray="1 12" stroke-linecap="round"></circle>
+  <circle cx="80" cy="80" r="46" fill="#2a1c58" stroke="#5ce0ff" stroke-width="4.5"></circle>
+  <circle cx="80" cy="80" r="35" fill="#ffcf5c" opacity="0.16"></circle>
+  <path d="M80 46 L88 72 L114 80 L88 88 L80 114 L72 88 L46 80 L72 72 Z" fill="#ffd76a" stroke="#2b1a4a" stroke-width="4.5" stroke-linejoin="round"></path>
+  <circle cx="80" cy="80" r="15" fill="#ffe8a0" stroke="#2b1a4a" stroke-width="4"></circle>
+  <circle cx="74" cy="74" r="4.5" fill="#fff6d6"></circle>
+</symbol>
+
+<symbol id="sys-single-destabilizing" viewBox="0 0 160 160">
+  <circle cx="80" cy="80" r="70" fill="none" stroke="#ffb347" stroke-width="3" stroke-dasharray="4 10" stroke-linecap="round"></circle>
+  <circle cx="80" cy="80" r="46" fill="#3a2140" stroke="#ffb347" stroke-width="4.5" stroke-dasharray="9 6"></circle>
+  <circle cx="80" cy="80" r="35" fill="#ff8a3c" opacity="0.2"></circle>
+  <path d="M80 46 L88 72 L114 80 L88 88 L80 114 L72 88 L46 80 L72 72 Z" fill="#ffa93c" stroke="#2b1a4a" stroke-width="4.5" stroke-linejoin="round"></path>
+  <circle cx="80" cy="80" r="15" fill="#ffd08a" stroke="#2b1a4a" stroke-width="4"></circle>
+  <path d="M80 66 L76 80 L84 82 L79 94" fill="none" stroke="#ff5c3c" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"></path>
+</symbol>
+
+<symbol id="sys-single-supernova" viewBox="0 0 160 160">
+  <circle cx="80" cy="80" r="72" fill="none" stroke="#ff5c5c" stroke-width="3.5" opacity="0.5"></circle>
+  <circle cx="80" cy="80" r="58" fill="none" stroke="#ff5c5c" stroke-width="4" stroke-dasharray="3 9"></circle>
+  <g fill="#ff7a4c" opacity="0.9"><path d="M80 6 L86 40 L74 40 Z"></path><path d="M80 154 L86 120 L74 120 Z"></path><path d="M6 80 L40 74 L40 86 Z"></path><path d="M154 80 L120 74 L120 86 Z"></path><path d="M28 28 L52 46 L44 54 Z"></path><path d="M132 132 L108 114 L116 106 Z"></path><path d="M132 28 L108 46 L116 54 Z"></path><path d="M28 132 L52 114 L44 106 Z"></path></g>
+  <circle cx="80" cy="80" r="40" fill="#ff5c3c"></circle>
+  <circle cx="80" cy="80" r="26" fill="#ffcf5c"></circle>
+  <circle cx="80" cy="80" r="13" fill="#fff6e2"></circle>
+</symbol>
+
+
+<symbol id="sys-binary-stable" viewBox="0 0 180 180">
+  <circle cx="90" cy="90" r="80" fill="none" stroke="#8b7bff" stroke-width="3" stroke-dasharray="1 12" stroke-linecap="round"></circle>
+  <circle cx="90" cy="90" r="56" fill="#332063" stroke="#ffcf5c" stroke-width="4.5"></circle>
+  <circle cx="90" cy="90" r="56" fill="none" stroke="#5ce0ff" stroke-width="3.5" stroke-dasharray="5 9"></circle>
+  <path d="M74 56 L79 74 L97 79 L79 84 L74 102 L69 84 L51 79 L69 74 Z" fill="#ffd76a" stroke="#2b1a4a" stroke-width="4" stroke-linejoin="round"></path>
+  <circle cx="74" cy="79" r="10.5" fill="#ffe8a0" stroke="#2b1a4a" stroke-width="3.4"></circle>
+  <path d="M112 82 L116 96 L130 100 L116 104 L112 118 L108 104 L94 100 L108 96 Z" fill="#ff9a52" stroke="#2b1a4a" stroke-width="3.6" stroke-linejoin="round"></path>
+  <circle cx="112" cy="100" r="8" fill="#ffc79a" stroke="#2b1a4a" stroke-width="3"></circle>
+  <path d="M126 60 l0 8 M122 64 l8 0" stroke="#5ce0ff" stroke-width="3" stroke-linecap="round"></path>
+</symbol>
+
+<symbol id="sys-binary-destabilizing" viewBox="0 0 180 180">
+  <circle cx="90" cy="90" r="80" fill="none" stroke="#ffb347" stroke-width="3" stroke-dasharray="4 10" stroke-linecap="round"></circle>
+  <circle cx="90" cy="90" r="56" fill="#402340" stroke="#ffb347" stroke-width="4.5" stroke-dasharray="9 6"></circle>
+  <path d="M74 56 L79 74 L97 79 L79 84 L74 102 L69 84 L51 79 L69 74 Z" fill="#ffa93c" stroke="#2b1a4a" stroke-width="4" stroke-linejoin="round"></path>
+  <circle cx="74" cy="79" r="10.5" fill="#ffd08a" stroke="#2b1a4a" stroke-width="3.4"></circle>
+  <path d="M112 82 L116 96 L130 100 L116 104 L112 118 L108 104 L94 100 L108 96 Z" fill="#ff7a3c" stroke="#2b1a4a" stroke-width="3.6" stroke-linejoin="round"></path>
+  <circle cx="112" cy="100" r="8" fill="#ffb07a" stroke="#2b1a4a" stroke-width="3"></circle>
+  <path d="M90 108 L86 120 L94 122" fill="none" stroke="#ff5c3c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path>
+</symbol>
+
+<symbol id="sys-binary-supernova" viewBox="0 0 180 180">
+  <circle cx="90" cy="90" r="82" fill="none" stroke="#ff5c5c" stroke-width="3.5" opacity="0.5"></circle>
+  <circle cx="90" cy="90" r="66" fill="none" stroke="#ff5c5c" stroke-width="4" stroke-dasharray="3 9"></circle>
+  <g fill="#ff7a4c" opacity="0.9"><path d="M90 10 L96 44 L84 44 Z"></path><path d="M90 170 L96 136 L84 136 Z"></path><path d="M10 90 L44 84 L44 96 Z"></path><path d="M170 90 L136 84 L136 96 Z"></path><path d="M34 34 L60 52 L52 60 Z"></path><path d="M146 146 L120 128 L128 120 Z"></path></g>
+  <circle cx="76" cy="82" r="30" fill="#ff5c3c"></circle>
+  <circle cx="76" cy="82" r="17" fill="#ffcf5c"></circle>
+  <circle cx="112" cy="104" r="20" fill="#ff7a3c"></circle>
+  <circle cx="112" cy="104" r="10" fill="#ffe08a"></circle>
+</symbol>
+
+
+
+<symbol id="ring-neutral" viewBox="0 0 160 160"><circle cx="80" cy="80" r="58" fill="none" stroke="#6b5ca8" stroke-width="4" stroke-dasharray="2 10" stroke-linecap="round"></circle></symbol>
+<symbol id="ring-owned-p1" viewBox="0 0 160 160"><circle cx="80" cy="80" r="58" fill="none" stroke="#ff8a3c" stroke-width="5"></circle><circle cx="80" cy="80" r="58" fill="none" stroke="#ffcf5c" stroke-width="2" stroke-dasharray="6 8"></circle></symbol>
+<symbol id="ring-owned-p2" viewBox="0 0 160 160"><circle cx="80" cy="80" r="58" fill="none" stroke="#2f8bff" stroke-width="5"></circle><circle cx="80" cy="80" r="58" fill="none" stroke="#8bf0ff" stroke-width="2" stroke-dasharray="6 8"></circle></symbol>
+
+<symbol id="flag-p1" viewBox="0 0 48 48"><ellipse cx="20" cy="42" rx="12" ry="3.5" fill="#2b1a4a" opacity="0.3"></ellipse><path d="M14 42 V8" stroke="#2b1a4a" stroke-width="3.6" stroke-linecap="round"></path><path d="M14 9 L38 15 L14 25 Z" fill="#ff6b3c" stroke="#2b1a4a" stroke-width="3.4" stroke-linejoin="round"></path><circle cx="14" cy="7" r="3.4" fill="#ffcf5c" stroke="#2b1a4a" stroke-width="2.2"></circle></symbol>
+<symbol id="flag-p2" viewBox="0 0 48 48"><ellipse cx="20" cy="42" rx="12" ry="3.5" fill="#2b1a4a" opacity="0.3"></ellipse><path d="M14 42 V8" stroke="#2b1a4a" stroke-width="3.6" stroke-linecap="round"></path><path d="M14 9 L38 15 L14 25 Z" fill="#2f8bff" stroke="#2b1a4a" stroke-width="3.4" stroke-linejoin="round"></path><circle cx="14" cy="7" r="3.4" fill="#5ce0ff" stroke="#2b1a4a" stroke-width="2.2"></circle></symbol>
+
+
+
+<symbol id="cache-energy" viewBox="0 0 64 64">
+  <path d="M32 6 L54 19 V45 L32 58 L10 45 V19 Z" fill="#123a52" stroke="#5ce0ff" stroke-width="4" stroke-linejoin="round"></path>
+  <path d="M34 17 L21 37 H30 L28 49 L43 28 H34 Z" fill="#8bf0ff" stroke="#eafcff" stroke-width="2.2" stroke-linejoin="round"></path>
+</symbol>
+
+<symbol id="cache-overcharge" viewBox="0 0 64 64">
+  <path d="M32 6 L54 19 V45 L32 58 L10 45 V19 Z" fill="#3a1c12" stroke="#ff8a3c" stroke-width="4" stroke-linejoin="round"></path>
+  <path d="M34 16 L20 38 H30 L27 50 L44 27 H34 Z" fill="#ff8a3c" stroke="#ffe0b0" stroke-width="2.2" stroke-linejoin="round"></path>
+</symbol>
+
+
+
+<symbol id="ship-warm" viewBox="0 0 140 140">
+  <path d="M92 94 L124 116 L96 72 Z" fill="#ff6b3c" stroke="#2b1a4a" stroke-width="5" stroke-linejoin="round"></path>
+  <path d="M48 94 L16 116 L44 72 Z" fill="#ff6b3c" stroke="#2b1a4a" stroke-width="5" stroke-linejoin="round"></path>
+  <path d="M70 12 C90 38 98 74 92 102 L48 102 C42 74 50 38 70 12 Z" fill="#ff9a52" stroke="#2b1a4a" stroke-width="5.5" stroke-linejoin="round"></path>
+  <ellipse cx="70" cy="56" rx="15" ry="19" fill="#5ce0ff" stroke="#2b1a4a" stroke-width="5"></ellipse>
+  <path d="M62 48 Q66 44 72 46" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path>
+  <circle cx="70" cy="90" r="4" fill="#ffcf5c" stroke="#2b1a4a" stroke-width="3"></circle>
+</symbol>
+
+<symbol id="ship-warm-flame" viewBox="0 0 140 140"><path d="M57 100 Q70 134 83 100 Q70 116 57 100 Z" fill="#ff6bb0"></path><path d="M62 100 Q70 122 78 100 Q70 112 62 100 Z" fill="#ffcf5c"></path></symbol>
+
+<symbol id="ship-cool" viewBox="0 0 140 140">
+  <path d="M90 90 L130 104 L94 68 Z" fill="#2f6bd6" stroke="#2b1a4a" stroke-width="5" stroke-linejoin="round"></path>
+  <path d="M50 90 L10 104 L46 68 Z" fill="#2f6bd6" stroke="#2b1a4a" stroke-width="5" stroke-linejoin="round"></path>
+  <path d="M70 8 C86 40 92 76 87 104 L53 104 C48 76 54 40 70 8 Z" fill="#4aa8ff" stroke="#2b1a4a" stroke-width="5.5" stroke-linejoin="round"></path>
+  <path d="M70 40 L84 52 L79 74 L61 74 L56 52 Z" fill="#0e2a4a" stroke="#2b1a4a" stroke-width="4.6" stroke-linejoin="round"></path>
+  <path d="M63 50 L71 46" fill="none" stroke="#5ce0ff" stroke-width="3.4" stroke-linecap="round"></path>
+  <path d="M70 20 L64 34 M70 20 L76 34" fill="none" stroke="#2b1a4a" stroke-width="4" stroke-linecap="round"></path>
+</symbol>
+<symbol id="ship-cool-flame" viewBox="0 0 140 140"><path d="M60 100 Q70 132 80 100 Q70 114 60 100 Z" fill="#5ce0ff"></path><path d="M64 100 Q70 120 76 100 Q70 112 64 100 Z" fill="#eafcff"></path></symbol>
+
+
+<symbol id="marker-candidate" viewBox="0 0 80 80">
+  <circle cx="40" cy="40" r="34" fill="#8b7bff" opacity="0.12"></circle>
+  <circle cx="40" cy="40" r="34" fill="none" stroke="#8b7bff" stroke-width="3.5" stroke-dasharray="5 8"></circle>
+  <path d="M32 32 a8 8 0 1 1 10 11 c-2 2 -2 3 -2 6" fill="none" stroke="#c9beff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>
+  <circle cx="40" cy="56" r="3.2" fill="#c9beff"></circle>
+</symbol>
+
+<symbol id="fx-cloak" viewBox="0 0 140 140">
+  <ellipse cx="70" cy="60" rx="52" ry="60" fill="#8b7bff" opacity="0.12"></ellipse>
+  <path d="M28 44 q10 -8 20 0 M92 44 q10 -8 20 0 M24 78 q10 -8 20 0 M96 78 q10 -8 20 0" fill="none" stroke="#c9beff" stroke-width="3" stroke-linecap="round" opacity="0.7"></path>
+  <use href="#deco-sparkle" x="18" y="30" width="16" height="16"></use>
+  <use href="#deco-sparkle" x="104" y="66" width="14" height="14"></use>
+</symbol>
+
+
+<symbol id="act-jump" viewBox="0 0 64 64">
+  <path d="M17 44 C 20 27, 33 21, 45 24" fill="none" stroke="#2b1a4a" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="0.1 9"></path>
+  <circle cx="13" cy="49" r="6" fill="#5ce0ff" stroke="#2b1a4a" stroke-width="3.5"></circle>
+  <path d="M39 15 L49 22 L42 31" fill="none" stroke="#2b1a4a" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+  <circle cx="50" cy="18" r="6" fill="#ffcf5c" stroke="#2b1a4a" stroke-width="3.5"></circle>
+</symbol>
+<symbol id="act-hold" viewBox="0 0 64 64">
+  <path d="M32 7 L52 15 V31 C52 44 43 52 32 57 C21 52 12 44 12 31 V15 Z" fill="#8b7bff" stroke="#2b1a4a" stroke-width="4" stroke-linejoin="round"></path>
+  <rect x="24.5" y="24" width="6" height="16" rx="3" fill="#fff4e2" stroke="#2b1a4a" stroke-width="2.6"></rect>
+  <rect x="33.5" y="24" width="6" height="16" rx="3" fill="#fff4e2" stroke="#2b1a4a" stroke-width="2.6"></rect>
+</symbol>
+<symbol id="act-claim" viewBox="0 0 64 64">
+  <ellipse cx="30" cy="53" rx="17" ry="5.5" fill="#2b1a4a" opacity="0.25"></ellipse>
+  <path d="M22 52 V13" stroke="#2b1a4a" stroke-width="4.5" stroke-linecap="round"></path>
+  <path d="M22 14 L47 20 L22 31 Z" fill="#ff6bb0" stroke="#2b1a4a" stroke-width="4" stroke-linejoin="round"></path>
+  <circle cx="22" cy="11" r="4" fill="#ffcf5c" stroke="#2b1a4a" stroke-width="2.6"></circle>
+</symbol>
+<symbol id="act-fire" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="16" fill="none" stroke="#2b1a4a" stroke-width="4"></circle>
+  <path d="M32 8 V16 M32 48 V56 M8 32 H16 M48 32 H56" stroke="#2b1a4a" stroke-width="4.5" stroke-linecap="round"></path>
+  <circle cx="32" cy="32" r="6" fill="#ff5c5c" stroke="#2b1a4a" stroke-width="3"></circle>
+</symbol>
+<symbol id="act-scan" viewBox="0 0 64 64">
+  <path d="M16 36 A14 14 0 0 1 30 50" fill="none" stroke="#5ce0ff" stroke-width="4.2" stroke-linecap="round"></path>
+  <path d="M16 26 A24 24 0 0 1 40 50" fill="none" stroke="#5ce0ff" stroke-width="4.2" stroke-linecap="round" opacity="0.7"></path>
+  <path d="M16 16 A34 34 0 0 1 50 50" fill="none" stroke="#5ce0ff" stroke-width="4.2" stroke-linecap="round" opacity="0.4"></path>
+  <circle cx="16" cy="50" r="5" fill="#5ce0ff" stroke="#2b1a4a" stroke-width="2.6"></circle>
+  <circle cx="44" cy="24" r="4.5" fill="#ff6bb0" stroke="#2b1a4a" stroke-width="2.6"></circle>
+</symbol>
+<symbol id="act-cloak" viewBox="0 0 64 64">
+  <path d="M9 32 C 18 20, 46 20, 55 32 C 46 44, 18 44, 9 32 Z" fill="#8b7bff" stroke="#2b1a4a" stroke-width="4" stroke-linejoin="round"></path>
+  <circle cx="32" cy="32" r="7.5" fill="#fff4e2" stroke="#2b1a4a" stroke-width="3.4"></circle>
+  <circle cx="32" cy="32" r="3.2" fill="#2b1a4a"></circle>
+  <path d="M14 51 L50 13" stroke="#ff6bb0" stroke-width="5.5" stroke-linecap="round"></path>
+</symbol>
+<symbol id="act-overcharge" viewBox="0 0 64 64">
+  <path d="M33 6 L17 35 H29 L27 58 L47 27 H34 Z" fill="#ff8a3c" stroke="#2b1a4a" stroke-width="4" stroke-linejoin="round"></path>
+  <circle cx="50" cy="15" r="9" fill="#ff5c3c" stroke="#2b1a4a" stroke-width="3"></circle>
+  <path d="M50 11 V19 M46 15 H54" stroke="#fff4e2" stroke-width="3" stroke-linecap="round"></path>
+</symbol>
+
+<symbol id="act-unlock-proximity" viewBox="0 0 64 64">
+  <path d="M40 15 A22 22 0 0 1 40 49" fill="none" stroke="#ffcf5c" stroke-width="4.2" stroke-linecap="round"></path>
+  <path d="M48 9 A31 31 0 0 1 48 55" fill="none" stroke="#ffcf5c" stroke-width="4" stroke-linecap="round" opacity="0.5"></path>
+  <circle cx="24" cy="32" r="10" fill="#ff5c5c" stroke="#2b1a4a" stroke-width="3.4"></circle>
+  <path d="M24 27 V33" stroke="#fff4e2" stroke-width="3.2" stroke-linecap="round"></path>
+  <circle cx="24" cy="37.5" r="1.8" fill="#fff4e2"></circle>
+</symbol>
+<symbol id="act-unlock-scanners" viewBox="0 0 64 64">
+  <g transform="rotate(-32 28 34)">
+    <ellipse cx="28" cy="34" rx="17" ry="11" fill="#5ce0ff" stroke="#2b1a4a" stroke-width="3.6"></ellipse>
+    <ellipse cx="28" cy="34" rx="7" ry="4.5" fill="#123a52"></ellipse>
+  </g>
+  <path d="M27 42 L23 55 M20 55 H34" stroke="#2b1a4a" stroke-width="3.8" stroke-linecap="round"></path>
+  <circle cx="46" cy="16" r="2.6" fill="#ffcf5c"></circle>
+  <circle cx="52" cy="22" r="3.4" fill="#ffcf5c"></circle>
+  <circle cx="40" cy="12" r="2" fill="#ffcf5c" opacity="0.7"></circle>
+</symbol>
+<symbol id="act-unlock-jamming" viewBox="0 0 64 64">
+  <path d="M22 34 A15 15 0 0 1 37 49" fill="none" stroke="#ffcf5c" stroke-width="4.2" stroke-linecap="round"></path>
+  <path d="M22 24 A25 25 0 0 1 47 49" fill="none" stroke="#ffcf5c" stroke-width="4.2" stroke-linecap="round" opacity="0.6"></path>
+  <circle cx="22" cy="49" r="5" fill="#ff6bb0" stroke="#2b1a4a" stroke-width="2.6"></circle>
+  <path d="M12 52 L52 12" stroke="#ff5c5c" stroke-width="5.5" stroke-linecap="round"></path>
+</symbol>
+
+
+
+<symbol id="fx-hit" viewBox="0 0 64 64">
+  <g fill="#ff5c3c" stroke="#2b1a4a" stroke-width="3" stroke-linejoin="round"><path d="M32 4 L38 22 L32 32 L26 22 Z"></path><path d="M32 60 L38 42 L32 32 L26 42 Z"></path><path d="M4 32 L22 26 L32 32 L22 38 Z"></path><path d="M60 32 L42 26 L32 32 L42 38 Z"></path><path d="M12 12 L27 24 L32 32 L20 27 Z"></path><path d="M52 52 L37 40 L32 32 L44 37 Z"></path><path d="M52 12 L40 27 L32 32 L37 20 Z"></path><path d="M12 52 L24 37 L32 32 L27 44 Z"></path></g>
+  <circle cx="32" cy="32" r="10" fill="#ffcf5c" stroke="#2b1a4a" stroke-width="3"></circle>
+  <circle cx="32" cy="32" r="4" fill="#fff6e2"></circle>
+</symbol>
+
+<symbol id="fx-miss" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#8b7bff" stroke-width="4" stroke-dasharray="4 7"></circle>
+  <path d="M24 24 L40 40 M40 24 L24 40" stroke="#c9beff" stroke-width="5" stroke-linecap="round"></path>
+  <circle cx="49" cy="17" r="3" fill="#8b7bff" opacity="0.6"></circle>
+  <circle cx="16" cy="46" r="4" fill="#8b7bff" opacity="0.4"></circle>
+</symbol>
+
+<symbol id="fx-scan-ping" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="8" fill="#5ce0ff" stroke="#eafcff" stroke-width="2.5"></circle>
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#5ce0ff" stroke-width="3.5" opacity="0.7"></circle>
+  <circle cx="32" cy="32" r="28" fill="none" stroke="#5ce0ff" stroke-width="3" opacity="0.35"></circle>
+</symbol>
+
+<symbol id="fx-exposed" viewBox="0 0 64 64">
+  <path d="M8 32 C 20 16, 44 16, 56 32 C 44 48, 20 48, 8 32 Z" fill="#ff5c5c" stroke="#2b1a4a" stroke-width="4" stroke-linejoin="round"></path>
+  <circle cx="32" cy="32" r="10" fill="#fff4e2" stroke="#2b1a4a" stroke-width="3.4"></circle>
+  <circle cx="32" cy="32" r="4.6" fill="#2b1a4a"></circle>
+</symbol>
+
+<symbol id="fx-spent-energy" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#8b7bff" stroke-width="4" stroke-dasharray="3 8"></circle>
+  <path d="M35 16 L23 36 H31 L29 48 L42 28 H33 Z" fill="#8b7bff" stroke="#c9beff" stroke-width="2" stroke-linejoin="round"></path>
+</symbol>
+
+
+
+<symbol id="res-energy" viewBox="0 0 64 64">
+  <path d="M32 5 L55 18.5 V45.5 L32 59 L9 45.5 V18.5 Z" fill="#123a52" stroke="#5ce0ff" stroke-width="4" stroke-linejoin="round"></path>
+  <path d="M35 15 L21 36 H30 L28 50 L44 27 H34 Z" fill="#8bf0ff" stroke="#eafcff" stroke-width="2.4" stroke-linejoin="round"></path>
+</symbol>
+
+<symbol id="res-overcharge" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="27" fill="#3a1c12" stroke="#ff8a3c" stroke-width="4"></circle>
+  <path d="M35 11 L18 37 H29 L26 53 L46 27 H34 Z" fill="#ff8a3c" stroke="#ffe0b0" stroke-width="2.6" stroke-linejoin="round"></path>
+</symbol>
+
+<symbol id="bolt-energy" viewBox="0 0 24 24"><path d="M14 2 L5 14 H11 L10 22 L19 9 H13 Z" fill="#5ce0ff" stroke="#123a52" stroke-width="1.4" stroke-linejoin="round"></path></symbol>
+<symbol id="bolt-action" viewBox="0 0 24 24"><path d="M14 2 L5 14 H11 L10 22 L19 9 H13 Z" fill="#ff8a3c" stroke="#5a2410" stroke-width="1.4" stroke-linejoin="round"></path></symbol>
+
+<symbol id="pip-action" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ff8a3c" stroke="#2b1a4a" stroke-width="2.4"></circle><path d="M13 5 L7 14 H11 L10 19 L17 10 H12 Z" fill="#fff4e2"></path></symbol>
+
+<symbol id="badge-lock" viewBox="0 0 28 28">
+  <circle cx="14" cy="14" r="13" fill="#ffcf5c" stroke="#2b1a4a" stroke-width="2.5"></circle>
+  <path d="M10 14 V11 a4 4 0 0 1 8 0 V14" fill="none" stroke="#2b1a4a" stroke-width="2.4"></path>
+  <rect x="8.5" y="13.5" width="11" height="8.5" rx="2.2" fill="#2b1a4a"></rect>
+</symbol>
+
+<symbol id="badge-p1" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="#ff9a52" stroke="#2b1a4a" stroke-width="2.6"></circle><text x="14" y="19" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="15" fill="#2b1a4a">1</text></symbol>
+<symbol id="badge-p2" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="#4aa8ff" stroke="#2b1a4a" stroke-width="2.6"></circle><text x="14" y="19" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="15" fill="#2b1a4a">2</text></symbol>
+
+<symbol id="hud-timer" viewBox="0 0 64 64">
+  <circle cx="32" cy="34" r="22" fill="#141033" stroke="#5ce0ff" stroke-width="4"></circle>
+  <path d="M32 34 V20" stroke="#5ce0ff" stroke-width="4" stroke-linecap="round"></path>
+  <path d="M32 34 L42 40" stroke="#ff8a3c" stroke-width="4" stroke-linecap="round"></path>
+  <rect x="26" y="6" width="12" height="5" rx="2.5" fill="#5ce0ff"></rect>
+  <circle cx="32" cy="34" r="3" fill="#eafcff"></circle>
+</symbol>
+
+</defs>
+</svg>

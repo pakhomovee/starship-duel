@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starship Duel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
+<div id="sprite-host" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-kicker">Neon Constellation</span>
+    <h1>Starship&nbsp;Duel</h1>
+  </div>
+  <div class="setup" id="setup">
+    <label>P1
+      <select id="sel-ship0"></select>
+    </label>
+    <label>P2
+      <select id="sel-ship1"></select>
+    </label>
+    <label>Seed
+      <input id="inp-seed" type="number" placeholder="random" style="width:90px">
+    </label>
+    <button id="btn-new" class="btn btn-primary">New Game</button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="board-wrap">
+    <div class="board-head">
+      <div id="mode-chip" class="chip">—</div>
+      <div id="turn-chip" class="chip chip-turn">—</div>
+      <div class="watch-controls" id="watch-controls" hidden>
+        <button id="btn-step" class="btn">Step ▷</button>
+        <button id="btn-play" class="btn">Auto ▶</button>
+        <button id="btn-pause" class="btn" hidden>Pause ⏸</button>
+        <label class="speed">Speed
+          <input id="inp-speed" type="range" min="80" max="1200" value="500" step="20">
+        </label>
+      </div>
+      <button id="btn-reset" class="btn btn-ghost">Reset</button>
+    </div>
+    <svg id="board" viewBox="0 0 1000 780" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="banner" class="banner" hidden></div>
+  </section>
+
+  <aside class="side">
+    <div class="panel" id="hud-panel">
+      <h2>Ships</h2>
+      <div id="hud"></div>
+    </div>
+
+    <div class="panel" id="action-panel">
+      <h2>Your move <span id="actions-pips" class="pips"></span></h2>
+      <div id="actions" class="actions"></div>
+      <p id="action-hint" class="hint"></p>
+    </div>
+
+    <div class="panel" id="log-panel">
+      <h2>Log</h2>
+      <div id="log" class="log"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
