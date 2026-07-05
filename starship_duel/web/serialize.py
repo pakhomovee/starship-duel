@@ -110,10 +110,11 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
              "known": True}
             for s in (0, 1)
         ]
-        # Belief overlays: what each observer thinks about the other.
+        # Belief overlays: read the engine's tracker directly (it is kept for
+        # visualization even though bots no longer receive it).
         view["candidates"] = {
-            "0": sorted(build_observation(eng, 0).candidate_systems),
-            "1": sorted(build_observation(eng, 1).candidate_systems),
+            "0": sorted(eng.belief[0].candidates),
+            "1": sorted(eng.belief[1].candidates),
         }
         view["hud"] = [_ship_hud(st, s) for s in (0, 1)]
         view["legal_actions"] = []
@@ -129,12 +130,17 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
              "position": rival.position if rival_known else None,
              "cloaked": rival.cloaked, "known": rival_known, "is_self": False},
         ]
-        view["candidates"] = {str(1 - me): sorted(obs.candidate_systems)}
+        view["candidates"] = {str(1 - me): sorted(eng.belief[me].candidates)}
         view["hud"] = [_obs_hud(obs, me)]
         view["rival_unlocked"] = obs.rival_unlocked
         view["rival_last_action"] = obs.rival_last_action
         view["legal_actions"] = (
             _legal_actions(session, obs) if view["awaiting_human"] else []
+        )
+        # Full catalogue (affordable + not) so the UI can show every option and
+        # dim the ones currently unavailable.
+        view["action_menu"] = (
+            _action_menu(session, obs) if view["awaiting_human"] else []
         )
     return view
 
@@ -174,3 +180,64 @@ def _legal_actions(session: GameSession, obs: Observation) -> List[dict]:
             "cost": _action_cost(session, a.type),
         })
     return out
+
+
+_UNLOCK_FLAG = {
+    ActionType.UNLOCK_PROXIMITY_ALERT: "proximity_alert",
+    ActionType.UNLOCK_LONG_RANGE_SCANNERS: "long_range_scanners",
+    ActionType.UNLOCK_JAMMING: "jamming",
+}
+
+
+def _action_menu(session: GameSession, obs: Observation) -> List[dict]:
+    """Every action the ship could ever take from here, each flagged
+    ``enabled`` (currently legal/affordable) with a short ``reason`` when not.
+    The engine remains the sole authority -- disabled entries are never
+    accepted server-side."""
+    from ..game import Action  # local import to keep module import-light
+
+    legal = set(obs.legal_actions)  # Action is a frozen dataclass -> hashable
+
+    catalogue: List[Action] = [Action.jump(d) for d in sorted(obs.adjacency.get(obs.position, []))]
+    catalogue += [
+        Action.hold(), Action.claim(), Action.fire(),
+        Action.scan(), Action.deep_cloak(), Action.overcharge(),
+        Action(ActionType.UNLOCK_PROXIMITY_ALERT),
+        Action(ActionType.UNLOCK_LONG_RANGE_SCANNERS),
+        Action(ActionType.UNLOCK_JAMMING),
+        Action.end_turn(),
+    ]
+
+    out = []
+    for a in catalogue:
+        enabled = a in legal
+        out.append({
+            "type": a.type.name,
+            "dest": a.dest,
+            "label": _LABELS[a.type] + (f" → {a.dest}" if a.dest else ""),
+            "cost": _action_cost(session, a.type),
+            "enabled": enabled,
+            "reason": None if enabled else _disabled_reason(a, obs, session),
+        })
+    return out
+
+
+def _disabled_reason(action, obs: Observation, session: GameSession) -> str:
+    t = action.type
+    cost = _action_cost(session, t)
+    if t in _UNLOCK_FLAG:
+        if obs.unlocked[_UNLOCK_FLAG[t]]:
+            return "already unlocked"
+        if cost is not None and obs.energy < cost:
+            return f"needs {cost}⚡ (have {obs.energy})"
+        return "unavailable"
+    if cost is not None and obs.energy < cost:  # SCAN / DEEP_CLOAK / OVERCHARGE
+        return f"needs {cost}⚡ (have {obs.energy})"
+    if t is ActionType.CLAIM:
+        return "already yours" if obs.system_owner.get(obs.position) == obs.ship_id else "can't claim here"
+    if t is ActionType.HOLD:
+        owner = obs.system_owner.get(obs.position)
+        return "enemy-held system" if owner not in (None, obs.ship_id) else "must move (unstable)"
+    if t is ActionType.JUMP:
+        return "route unstable"
+    return "unavailable"

@@ -90,6 +90,12 @@ class TestWebApi(unittest.TestCase):
         view = r.json()
         gid = view["game_id"]
         self.assertEqual(view["mode"], "human_vs_bot")
+        # The bot may move first now (no server-side auto-play); step it until
+        # it is the human's turn, exactly as the UI does.
+        guard = 0
+        while not view["awaiting_human"] and not view["done"] and guard < 200:
+            view = self.client.post(f"/api/game/{gid}/step").json()
+            guard += 1
         self.assertTrue(view["awaiting_human"])
         # A legal action from the served list must succeed.
         legal = view["legal_actions"][0]

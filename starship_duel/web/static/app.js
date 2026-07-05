@@ -44,11 +44,12 @@ async function boot() {
   const svg = await (await fetch("/static/sprites.svg")).text();
   $("#sprite-host").innerHTML = svg;
 
+  // /api/bots already includes "human"; don't prepend it again.
   const { bots } = await (await fetch("/api/bots")).json();
-  const opts = (extra) => [extra, ...bots]
-    .map((b) => `<option value="${b}">${b}</option>`).join("");
-  $("#sel-ship0").innerHTML = opts("human");
-  $("#sel-ship1").innerHTML = opts("human");
+  const opts = () => bots.map((b) => `<option value="${b}">${b}</option>`).join("");
+  $("#sel-ship0").innerHTML = opts();
+  $("#sel-ship1").innerHTML = opts();
+  $("#sel-ship0").value = "human";
   $("#sel-ship1").value = "heuristic";
 
   $("#btn-new").onclick = newGame;
@@ -72,7 +73,7 @@ async function newGame() {
   };
   const view = await postJSON("/api/game", body);
   onView(view);
-  if (view.mode === "bot_vs_bot") openWs(view.game_id);
+  openWs(view.game_id);   // WS drives Step/Auto in every mode
 }
 
 async function resetGame() {
@@ -84,6 +85,8 @@ async function resetGame() {
 async function humanAction(type, dest) {
   const view = await postJSON(`/api/game/${State.game.game_id}/action`, { type, dest });
   onView(view);
+  // If Auto is engaged, let the bot continue after our move.
+  if (State.playing && view.can_step) wsSend({ cmd: "play", delay: speed() });
 }
 
 // ---- websocket (watch mode) ------------------------------------------------
@@ -110,9 +113,14 @@ function onView(view) {
   renderActions(view);
   renderLog(view);
   renderBanner(view);
-  const watch = view.mode === "bot_vs_bot";
-  $("#watch-controls").hidden = !watch;
-  $("#action-panel").style.display = watch ? "none" : "";
+  // Step/Auto are available in every mode so you can watch bot actions unfold.
+  $("#watch-controls").hidden = false;
+  $("#btn-step").disabled = !view.can_step;
+  $("#btn-play").disabled = view.done;
+  // The action panel is only relevant when a human is involved.
+  $("#action-panel").style.display = view.mode === "bot_vs_bot" ? "none" : "";
+  // Stop auto-play indicator once the game can no longer advance on its own.
+  if (view.done) setPlaying(false);
 }
 
 function renderChips(v) {
@@ -251,7 +259,11 @@ function renderActions(v) {
 
   if (v.mode === "bot_vs_bot") return;
   if (v.done) { hint.textContent = "Skirmish over — start a new game."; return; }
-  if (!v.awaiting_human) { hint.textContent = `Waiting for ${v.controllers[String(v.turn_ship)]}…`; return; }
+  if (!v.awaiting_human) {
+    const who = v.controllers[String(v.turn_ship)];
+    hint.textContent = `${who}'s turn — press Step to watch one action, or Auto to run it.`;
+    return;
+  }
   hint.textContent = "Tip: glowing systems are jump targets — click them on the map too.";
 
   const me = v.hud[0];
@@ -262,13 +274,19 @@ function renderActions(v) {
     pips.appendChild(s);
   }
 
-  for (const a of v.legal_actions) {
+  // Show the whole catalogue; dim what's currently unaffordable/unavailable.
+  for (const a of v.action_menu) {
     const btn = document.createElement("button");
-    btn.className = `act-btn act-${a.type}` + (a.type === "JUMP" ? " jump-highlight" : "");
-    const cost = a.cost ? `<span class="cost">${a.cost}⚡</span>` : "";
+    btn.className = `act-btn act-${a.type}`
+      + (a.type === "JUMP" && a.enabled ? " jump-highlight" : "")
+      + (a.enabled ? "" : " disabled");
+    // Enabled -> show the cost on the right; disabled -> reason under the label.
+    const cost = a.enabled && a.cost ? `<span class="cost">${a.cost}⚡</span>` : "";
+    const reason = a.enabled ? "" : `<span class="reason">${a.reason || ""}</span>`;
     btn.innerHTML = `<svg class="ic" viewBox="0 0 64 64"><use href="#${ACT_ICON[a.type]}"/></svg>
-                     <span>${a.label}</span>${cost}`;
-    btn.onclick = () => humanAction(a.type, a.dest);
+                     <span class="body"><span class="label">${a.label}</span>${reason}</span>${cost}`;
+    if (a.enabled) btn.onclick = () => humanAction(a.type, a.dest);
+    else { btn.disabled = true; btn.title = a.reason || "unavailable"; }
     host.appendChild(btn);
   }
 }

@@ -126,19 +126,30 @@ select, input {
 .pos-hidden { color: var(--violet); font-style: italic; }
 
 /* actions */
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* minmax(0,1fr) lets tracks shrink below their content so long labels can't
+   push a column past its share and overflow the panel. */
+.actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .act-btn {
   display: flex; align-items: center; gap: 8px; text-align: left; padding: 9px 10px; border-radius: 12px;
+  min-width: 0; overflow: hidden;
   background: var(--panel-2); border: 1px solid #ffffff1c; cursor: pointer; color: var(--text);
   font-family: 'Nunito'; font-weight: 700; font-size: 12.5px; transition: background .12s, transform .05s;
 }
 .act-btn:hover { background: #2a1f66; }
 .act-btn:active { transform: translateY(1px); }
 .act-btn .ic { width: 22px; height: 22px; flex: 0 0 22px; }
-.act-btn .cost { margin-left: auto; font: 700 10px 'JetBrains Mono'; color: var(--cyan); }
+/* label (and, when disabled, the reason beneath it) take the remaining room */
+.act-btn .body { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.act-btn .label { overflow-wrap: break-word; line-height: 1.15; }
+.act-btn .reason { font: 700 9px 'JetBrains Mono'; color: var(--muted); overflow-wrap: break-word; }
+.act-btn .cost { margin-left: auto; flex: 0 0 auto; font: 700 10px 'JetBrains Mono'; color: var(--cyan); }
 .act-btn.act-FIRE { border-color: #ff5c5c66; }
 .act-btn.act-END_TURN { border-color: var(--gold); background: #2a2148; grid-column: 1 / -1; justify-content: center; }
 .act-btn.jump-highlight { border-color: var(--cyan); }
+/* Unaffordable / unavailable: shown but dimmed and non-interactive. */
+.act-btn.disabled { opacity: .34; cursor: not-allowed; filter: grayscale(0.4); }
+.act-btn.disabled:hover { background: var(--panel-2); }
+.act-btn.disabled:active { transform: none; }
 .hint { color: var(--muted); font-size: 12px; margin: 10px 2px 0; }
 .pips { display: inline-flex; gap: 3px; }
 .pips .ic { width: 16px; height: 16px; }

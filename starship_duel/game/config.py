@@ -25,6 +25,11 @@ class GameConfig:
     cost_unlock_long_range_scanners: int = 40
     cost_unlock_jamming: int = 25
 
+    # Deep Cloak: how many of the ship's own turns it stays undetectable for
+    # (immune to exposure + end-of-turn forced fire).  2 => it covers this turn,
+    # the rival's turn, and the ship's next turn.
+    deep_cloak_duration: int = 2
+
     # -- caches (spec 5b) ----------------------------------------------------
     # The spec's pseudocode spawns a cache in *every* empty system every tick,
     # which floods the map with energy and removes all scarcity.  Instead we
@@ -48,6 +53,11 @@ class GameConfig:
     destabilize_prob: float = 0.02      # per stable, unoccupied system per tick
     supernova_prob: float = 0.5         # destabilizing -> supernova per tick
 
+    # End-of-turn forced fire (spec 5): if a ship ends its turn co-located with
+    # the rival without having FIRE-d, the rival auto-fires and the mover loses.
+    # Disabled by default -- a kill now requires actively choosing FIRE.
+    enable_forced_fire: bool = False
+
     # -- episode bounds (spec 6) --------------------------------------------
     turn_cap: int = 200
     # How a turn-cap timeout resolves: "draw" | "systems" (most systems owned,
@@ -61,8 +71,17 @@ class GameConfig:
     # True: literal spec text -- entering the rival's system reveals *both*.
     reveal_both_on_colocation_entry: bool = False
 
+    # Seed each side's belief with the rival's *exact* starting system (both
+    # initial positions are revealed at skirmish start, then re-hidden as ships
+    # move under cloak).  Matches the spec's "last confirmed position" model and
+    # is much more playable.  Set False for maximal initial uncertainty (belief
+    # seeded to the whole spawn-consistent set instead).
+    reveal_initial_positions: bool = True
+
     # -- belief tracking -----------------------------------------------------
-    # Remove observer-owned systems from a cloaked rival's candidate set (a
-    # cloaked rival cannot sit in a system you own without having exposed
-    # itself on entry).  Approximate -- ignores the Deep-Cloak exception.
-    belief_prune_owned: bool = True
+    # Remove observer-owned systems from a cloaked rival's candidate set.  This
+    # was sound before Deep Cloak (entering an owned system exposes you), but a
+    # deep-cloaked ship can now sit in your territory undetected, so the prune
+    # can wrongly rule out the rival's true system.  Default OFF to preserve the
+    # belief-soundness invariant (true position always in the candidate set).
+    belief_prune_owned: bool = False

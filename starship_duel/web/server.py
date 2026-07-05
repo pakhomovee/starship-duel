@@ -10,6 +10,7 @@ bot-vs-bot game for step-by-step / auto-play watching.
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Dict, Optional, Union
 
@@ -23,6 +24,16 @@ from ..game import GameConfig
 from ..game.maps import MAPS
 from .serialize import serialize
 from .session import GameSession
+
+# Surface package logs (e.g. the DeepSeek bot) on the server console even under
+# uvicorn's own logging config.
+_pkg_log = logging.getLogger("starship_duel")
+_pkg_log.setLevel(logging.INFO)
+if not _pkg_log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(levelname)s [%(name)s] %(message)s"))
+    _pkg_log.addHandler(_h)
+    _pkg_log.propagate = False
 
 app = FastAPI(title="Starship Duel")
 
@@ -146,11 +157,23 @@ async def watch(ws: WebSocket, game_id: str):
     async def send_state():
         await ws.send_json(_view(s))
 
+    async def step_once() -> bool:
+        """Advance one bot action off the event loop (a DeepSeek step may be
+        slow).  Returns True if it actually advanced."""
+        def locked_step():
+            with s.lock:
+                if not s.can_step_bot():
+                    return False
+                s.step_bot()
+                return True
+        return await asyncio.to_thread(locked_step)
+
     async def autoplay(delay: float):
         try:
-            while not s.env.done:
-                with s.lock:
-                    s.step_bot()
+            # Auto-advance bot actions, stopping when it's a human's turn or the
+            # skirmish ends (so human-vs-bot pauses for your input).
+            while s.can_step_bot():
+                await step_once()
                 await send_state()
                 await asyncio.sleep(max(delay, 0.02))
         except asyncio.CancelledError:
@@ -164,8 +187,7 @@ async def watch(ws: WebSocket, game_id: str):
             if cmd == "step":
                 if play_task:
                     play_task.cancel(); play_task = None
-                with s.lock:
-                    s.step_bot()
+                await step_once()
                 await send_state()
             elif cmd == "play":
                 if not play_task or play_task.done():

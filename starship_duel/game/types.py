@@ -132,7 +132,12 @@ class Cache:
 class ShipState:
     position: System
     cloaked: bool = True
-    deep_cloak_active: bool = False  # immune to exposure until start of own next turn
+    # Number of the ship's *own* upcoming turns that Deep Cloak still covers.
+    # While > 0 the ship is immune to every exposure trigger AND to the
+    # end-of-turn forced fire — i.e. it can sit in enemy territory, or end its
+    # turn on top of the rival, completely undetected.  Decrements at the start
+    # of the ship's own turn.
+    deep_cloak_turns_left: int = 0
     energy: int = 0
     banked_overcharge: int = 0  # extra actions banked for next turn; uncapped
     actions_remaining: int = 0  # this turn: 2 + banked_overcharge, consumed as spent
@@ -147,11 +152,15 @@ class ShipState:
     # it (already jam-obfuscated).  ``None`` before the ship has acted.
     last_public_action: Optional[str] = None
 
+    @property
+    def deep_cloak_active(self) -> bool:
+        return self.deep_cloak_turns_left > 0
+
     def clone(self) -> "ShipState":
         return ShipState(
             position=self.position,
             cloaked=self.cloaked,
-            deep_cloak_active=self.deep_cloak_active,
+            deep_cloak_turns_left=self.deep_cloak_turns_left,
             energy=self.energy,
             banked_overcharge=self.banked_overcharge,
             actions_remaining=self.actions_remaining,

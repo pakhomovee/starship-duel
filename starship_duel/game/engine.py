@@ -75,11 +75,23 @@ class Engine:
             ships=ships,
         )
 
-        # Seed each observer's belief with the spawn-consistent candidate set:
-        # "the rival is somewhere at least min_hop_distance away from me".
+        # Per-observer "last confirmed sighting" of the rival: the system it was
+        # last seen in, and how many of its turns have passed since.  Surfaced in
+        # the observation so a bot can re-run the reachability BFS itself.
+        self._last_seen_pos: List[Optional[System]] = [None, None]
+        self._rival_turns_unseen: List[int] = [0, 0]
+
+        # Seed each observer's belief.  By default both initial positions are
+        # revealed, so belief starts pinned to the rival's exact spawn and
+        # re-expands as they move under cloak (spec's "last confirmed position"
+        # model); otherwise seed the whole spawn-consistent set.
         self.belief = [BeliefTracker(gmap), BeliefTracker(gmap)]
         for o in (0, 1):
-            self.belief[o].reset(self._spawn_consistent_set(ships[o].position))
+            rival_pos = ships[other(o)].position
+            if self.config.reveal_initial_positions:
+                self._see(o, rival_pos)  # a hard reveal (pinned) at spawn
+            else:
+                self.belief[o].reset(self._spawn_consistent_set(ships[o].position))
 
         self._start_turn(first)
         return self.state
@@ -256,19 +268,18 @@ class Engine:
         if ship.cloaked:
             self.belief[rival_id].on_rival_jump()
         else:
-            self.belief[rival_id].pin(ship.position)
+            self._see(rival_id, ship.position)  # still exposed -> tracked exactly
 
     def _do_hold(self, s: ShipId, action: Action, events: List[str]) -> None:
         ship = self.state.ships[s]
         was_exposed = not ship.cloaked
         ship.cloaked = True
         events.append(f"ship{s} holds")
-        obs = self.belief[other(s)]
         if was_exposed:
             # Seen at this system, now re-cloaks in place: still known here, but
             # free to expand again on the next observed jump.
-            obs.pin(ship.position)
-            obs.unpin()
+            self._see(other(s), ship.position)
+            self.belief[other(s)].unpin()
         # else: cloaked hold -> candidate set unchanged.
 
     def _do_claim(self, s: ShipId, action: Action, events: List[str]) -> None:
@@ -298,7 +309,7 @@ class Engine:
         rival = st.ships[rival_id]
         ship.energy -= self.config.cost_scan
         if not rival.deep_cloak_active:
-            self.belief[s].pin(rival.position)  # scanner learns exact system
+            self._see(s, rival.position)  # scanner learns exact system
             events.append(f"ship{s} scans: rival at {rival.position}")
         else:
             events.append(f"ship{s} scans: rival deep-cloaked, no reading")
@@ -308,12 +319,11 @@ class Engine:
         ship.energy -= self.config.cost_deep_cloak
         was_exposed = not ship.cloaked
         ship.cloaked = True
-        ship.deep_cloak_active = True
-        events.append(f"ship{s} engages deep cloak")
+        ship.deep_cloak_turns_left = self.config.deep_cloak_duration
+        events.append(f"ship{s} engages deep cloak ({ship.deep_cloak_turns_left} turns)")
         if was_exposed:
-            obs = self.belief[other(s)]
-            obs.pin(ship.position)
-            obs.unpin()
+            self._see(other(s), ship.position)
+            self.belief[other(s)].unpin()
 
     def _do_overcharge(self, s: ShipId, action: Action, events: List[str]) -> None:
         ship = self.state.ships[s]
@@ -329,13 +339,20 @@ class Engine:
         events.append(f"ship{s} unlocks {flag}")
 
     # --------------------------------------------------------- exposure/reveal
+    def _see(self, observer: ShipId, system: System) -> None:
+        """Record a hard sighting: ``observer`` now knows the rival is at
+        ``system``.  Pins belief and resets the last-seen bookkeeping."""
+        self.belief[observer].pin(system)
+        self._last_seen_pos[observer] = system
+        self._rival_turns_unseen[observer] = 0
+
     def _expose(self, s: ShipId, events: List[str], reason: str = "") -> None:
         """Reveal ship ``s``'s exact position to its rival (unless deep-cloaked)."""
         ship = self.state.ships[s]
         if ship.deep_cloak_active:
             return  # immune to exposure triggers
         ship.cloaked = False
-        self.belief[other(s)].pin(ship.position)
+        self._see(other(s), ship.position)
         if reason:
             events.append(f"ship{s} exposed ({reason}) at {ship.position}")
 
@@ -344,7 +361,7 @@ class Engine:
         rival = self.state.ships[other(observer)]
         if rival.deep_cloak_active:
             return
-        self.belief[observer].pin(rival.position)
+        self._see(observer, rival.position)
         events.append(f"ship{observer} detects rival at {rival.position} ({reason})")
 
     # ----------------------------------------------------------- turn lifecycle
@@ -366,7 +383,9 @@ class Engine:
 
         ship.actions_remaining = cfg.base_actions + ship.banked_overcharge
         ship.banked_overcharge = 0
-        ship.deep_cloak_active = False  # expires at start of own turn
+        # Deep Cloak counts down one of the ship's own turns each start.
+        if ship.deep_cloak_turns_left > 0:
+            ship.deep_cloak_turns_left -= 1
         st.turn_clock = cfg.turn_clock_start
 
         # Cache collection: only when *starting* a turn on a cache (spec 5b).
@@ -397,14 +416,21 @@ class Engine:
         ship.banked_overcharge += rollover
         ship.actions_remaining = 0
 
+        # This ship (``s``) just finished a turn; from the rival's viewpoint it is
+        # one more of ``s``'s turns since the rival last had it in sight.
+        if not self.belief[rival_id].is_pinned:
+            self._rival_turns_unseen[rival_id] += 1
+
         # Supernova destruction: caught on a collapsing star at end of turn.
         if cfg.enable_supernova and st.system_status[ship.position] is SystemStatus.SUPERNOVA:
             self._win(rival_id, "supernova", events)
             return
 
-        # Forced fire on end-of-turn co-location (spec 5): the mover who did not
-        # fire is the one fired upon.
-        if ship.position == rival.position:
+        # Optional forced fire on end-of-turn co-location (spec 5): the mover who
+        # did not fire is the one fired upon -- unless deep-cloaked.  Disabled by
+        # default (a kill requires actively choosing FIRE).
+        if (cfg.enable_forced_fire and ship.position == rival.position
+                and not ship.deep_cloak_active):
             events.append(f"ship{s} ends co-located; ship{rival_id} force-fires")
             self._win(rival_id, "forced_fire", events)
             return

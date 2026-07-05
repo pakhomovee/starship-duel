@@ -1,14 +1,16 @@
 """Partial-information observation for one ship (spec 3).
 
 Everything here is public or self-private for the observing ship; the rival's
-exact position, energy, cloak and banked overcharge are never included.  The
-rival's "could be here" set is exposed as :attr:`Observation.candidate_systems`.
+energy, banked overcharge, and hidden position are never included.  The rival's
+exact system is given (as :attr:`Observation.rival_position`) only when it is
+known for certain; the fuzzy "could be here" set is intentionally omitted so
+bots infer it themselves.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from .engine import Engine
 from .types import Action, ShipId, System, other
@@ -42,8 +44,21 @@ class Observation:
     actions_remaining: int
     unlocked: Dict[str, bool]
 
-    # -- inferred hidden-info layer -----------------------------------------
-    candidate_systems: List[System]
+    # -- hidden-info layer --------------------------------------------------
+    # The rival's EXACT system when it is currently known for certain (they are
+    # exposed, or a Scan/reveal has pinned them and they haven't moved since),
+    # else ``None``.  The fuzzy "could be here" set is deliberately NOT provided
+    # -- a bot must infer the rival's possible whereabouts itself (see
+    # ``starship_duel.bots.belief.BotBelief`` for a ready-made helper).
+    rival_position: Optional[System]
+
+    # Enough to reconstruct the reachability BFS yourself: the last system the
+    # rival was confirmed in (``None`` if never), and an upper bound on how many
+    # single-hop moves it could have made since (0 while currently known).  The
+    # candidate set is roughly ``systems within rival_moves_since_seen hops of
+    # rival_last_seen``.
+    rival_last_seen: Optional[System]
+    rival_moves_since_seen: int
 
     # -- convenience for policies / bots ------------------------------------
     legal_actions: List[Action] = field(default_factory=list)
@@ -64,16 +79,24 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
     rival_id = other(ship)
     rival = st.ships[rival_id]
 
-    # Candidate set: authoritative when the rival is currently exposed,
-    # otherwise the belief set, pruned by public constraints (spec 3a).
+    # Hard reveal only: the exact rival system when it is known for certain
+    # (exposed, or pinned by a Scan/reveal that is still valid), else None.
+    # The engine's belief tracker is kept for the UI/spectator overlay, but is
+    # not surfaced to the observer -- bots infer their own fuzzy belief.
     if not rival.cloaked:
-        candidates: Set[System] = {rival.position}
+        rival_position: Optional[System] = rival.position
     else:
         bt = engine.belief[ship]
-        candidates = bt.candidates
-        if engine.config.belief_prune_owned:
-            owned_by_me = {s for s, o in st.system_owner.items() if o == ship}
-            candidates = candidates - owned_by_me or candidates
+        cands = bt.candidates
+        rival_position = next(iter(cands)) if (bt.is_pinned and len(cands) == 1) else None
+
+    # Materials for the observer's own reachability BFS.
+    last_seen = engine._last_seen_pos[ship]
+    if rival_position is not None:
+        last_seen = rival_position
+        moves_since_seen = 0
+    else:
+        moves_since_seen = engine._rival_turns_unseen[ship] * engine.config.base_actions
 
     cache_view: Dict[System, Optional[dict]] = {}
     for s, c in st.system_cache.items():
@@ -100,6 +123,8 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
         banked_overcharge=me.banked_overcharge,
         actions_remaining=me.actions_remaining,
         unlocked=dict(me.unlocked),
-        candidate_systems=sorted(candidates),
+        rival_position=rival_position,
+        rival_last_seen=last_seen,
+        rival_moves_since_seen=moves_since_seen,
         legal_actions=engine.legal_actions(ship) if st.turn_ship == ship else [],
     )

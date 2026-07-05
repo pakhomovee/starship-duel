@@ -108,11 +108,19 @@ class TestCombat(unittest.TestCase):
         e.apply_action(Action.fire())
         self.assertFalse(e.state.done)
 
-    def test_ending_turn_colocated_loses(self):
+    def test_ending_turn_colocated_is_safe_by_default(self):
+        # Auto-fire is off by default: ending co-located is no longer fatal.
         e = fresh_engine()
         s = e.current_ship
         rival = 1 - s
-        # Move onto the rival without firing, then end the turn.
+        e.state.ships[rival].position = e.state.ships[s].position
+        e.apply_action(Action.end_turn())
+        self.assertFalse(e.state.done)
+
+    def test_forced_fire_when_enabled(self):
+        e = fresh_engine(enable_forced_fire=True)
+        s = e.current_ship
+        rival = 1 - s
         e.state.ships[rival].position = e.state.ships[s].position
         e.apply_action(Action.end_turn())
         self.assertTrue(e.state.done)
@@ -173,12 +181,63 @@ class TestBelief(unittest.TestCase):
         e.apply_action(Action.jump(e.map.neighbors(pos)[0]))
         self.assertEqual(e.belief[1].candidates, expected)
 
-    def test_observation_hides_rival_position(self):
+    def test_initial_positions_revealed(self):
+        # Default config reveals both spawns -> rival's exact system is given.
         e = fresh_engine()
         obs = build_observation(e, 0)
-        # The rival's exact system must not be uniquely leaked at spawn.
-        self.assertNotIn("position", obs.rival_unlocked)  # sanity: no rival privates
-        self.assertGreater(len(obs.candidate_systems), 1)
+        self.assertEqual(obs.rival_position, e.state.ships[1].position)
+
+    def test_uncertain_start_when_disabled(self):
+        # No initial reveal -> observation gives no exact position, but the
+        # engine's (UI-only) belief still soundly contains the truth.
+        e = fresh_engine(reveal_initial_positions=False)
+        obs = build_observation(e, 0)
+        self.assertIsNone(obs.rival_position)
+        self.assertGreater(len(e.belief[0].candidates), 1)
+        self.assertIn(e.state.ships[1].position, e.belief[0].candidates)
+
+    def test_observation_omits_fuzzy_candidate_set(self):
+        # The "could be here" set must not be handed to bots anymore.
+        e = fresh_engine()
+        obs = build_observation(e, 0)
+        self.assertFalse(hasattr(obs, "candidate_systems"))
+
+
+class TestDeepCloak(unittest.TestCase):
+    def test_immune_to_exposure_triggers(self):
+        e = fresh_engine()
+        s = e.current_ship
+        e.state.ships[s].energy = 100
+        e.apply_action(Action.deep_cloak())
+        self.assertTrue(e.state.ships[s].deep_cloak_active)
+        e._expose(s, [])  # exposure trigger is a no-op while deep-cloaked
+        self.assertTrue(e.state.ships[s].cloaked)
+
+    def test_survives_ending_turn_colocated(self):
+        # With forced fire ON, a non-cloaked ship would lose here; deep cloak
+        # keeps it undetected so no shot is taken.
+        e = fresh_engine(enable_forced_fire=True)
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[s].energy = 100
+        e.apply_action(Action.deep_cloak())
+        e.state.ships[rival].position = e.state.ships[s].position
+        e.apply_action(Action.end_turn())
+        self.assertFalse(e.state.done)  # undetected -> no forced fire
+
+    def test_expires_after_duration(self):
+        e = fresh_engine(deep_cloak_duration=2)
+        s = e.current_ship
+        e.state.ships[s].energy = 100
+        e.apply_action(Action.deep_cloak())
+        self.assertEqual(e.state.ships[s].deep_cloak_turns_left, 2)
+        e.apply_action(Action.end_turn())   # s ends
+        e.apply_action(Action.end_turn())   # rival ends -> s start: 2 -> 1
+        self.assertEqual(e.state.ships[s].deep_cloak_turns_left, 1)
+        self.assertTrue(e.state.ships[s].deep_cloak_active)
+        e.apply_action(Action.end_turn())
+        e.apply_action(Action.end_turn())   # s start again: 1 -> 0
+        self.assertFalse(e.state.ships[s].deep_cloak_active)
 
 
 class TestBeliefSoundness(unittest.TestCase):
@@ -194,9 +253,10 @@ class TestBeliefSoundness(unittest.TestCase):
             steps = 0
             while not env.done and steps < 5000:
                 a = env.agent_selection
+                # Soundness is a property of the engine's belief tracker (kept
+                # for the UI); the true rival system is never ruled out.
                 for o in (0, 1):
-                    obs = build_observation(env.engine, o)
-                    self.assertIn(st.ships[1 - o].position, obs.candidate_systems)
+                    self.assertIn(st.ships[1 - o].position, env.engine.belief[o].candidates)
                 env.step(bots[agent_id(a)].act(env.observe(a)))
                 steps += 1
 

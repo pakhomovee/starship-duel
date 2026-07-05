@@ -67,10 +67,8 @@ class GameSession:
         self.events.append(
             f"skirmish start on {st.map_id}; ship_{st.turn_ship} moves first"
         )
-        # In human-vs-bot / bot-vs-bot, auto-advance until a human is needed
-        # (bot-vs-bot stops immediately so the UI can step it).
-        if self.mode == "human_vs_bot":
-            self._auto_play_until_human()
+        # No auto-play: bot turns are advanced explicitly (Step / Auto) so the
+        # UI can watch every bot action unfold, even in human-vs-bot.
 
     # -- human input ---------------------------------------------------------
     def apply_human_action(self, action_type: str, dest: Optional[str]) -> List[str]:
@@ -82,13 +80,7 @@ class GameSession:
         action = Action(atype, dest)
         if not self.env.engine.is_legal(action, self.current_ship):
             raise ValueError(f"illegal action {action_type} {dest or ''}".strip())
-
-        new_events = self._step(action)
-        # After the human's action, let any bot turns play out (hotseat
-        # human-vs-human never auto-plays -- the other human takes over).
-        if self.mode == "human_vs_bot":
-            new_events += self._auto_play_until_human()
-        return new_events
+        return self._step(action)
 
     def _step(self, action: Action) -> List[str]:
         self.env.step(action)
@@ -97,25 +89,18 @@ class GameSession:
         return evs
 
     # -- bot stepping --------------------------------------------------------
+    def can_step_bot(self) -> bool:
+        return not self.env.done and not self.is_human_turn()
+
     def step_bot(self) -> List[str]:
-        """Advance exactly one bot action (for watching bot-vs-bot)."""
-        if self.env.done or self.is_human_turn():
+        """Advance exactly one bot action (used by Step / Auto in any mode)."""
+        if not self.can_step_bot():
             return []
         ship = self.current_ship
         bot = self.bots[ship]
         obs = build_observation(self.env.engine, ship)
         action = bot.act(obs)
         return self._step(action)
-
-    def _auto_play_until_human(self, guard: int = 10000) -> List[str]:
-        collected: List[str] = []
-        n = 0
-        while not self.env.done and not self.is_human_turn():
-            collected += self.step_bot()
-            n += 1
-            if n > guard:
-                raise RuntimeError("auto-play guard tripped")
-        return collected
 
     def recent_events(self, limit: int = 40) -> List[str]:
         return self.events[-limit:]

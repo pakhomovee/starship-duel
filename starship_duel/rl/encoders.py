@@ -20,7 +20,7 @@ import numpy as np
 from ..game import ActionType, Observation
 
 # Per-system one-hot / scalar features (see _encode_systems).
-PER_SYSTEM = 15
+PER_SYSTEM = 16
 
 # Categories a rival's last public action can collapse to (spec 3).
 _RIVAL_ACTION_VOCAB = [
@@ -42,7 +42,8 @@ class ObservationEncoder:
             + 1      # cloaked
             + 3      # my unlocks
             + 3      # rival unlocks
-            + 1      # candidate-set size (normalised)
+            + 1      # rival_position known (hard reveal)
+            + 1      # rival_moves_since_seen (normalised BFS radius)
             + 1      # turn_number (normalised)
             + 1      # campaign score differential
             + len(_RIVAL_ACTION_VOCAB)  # rival last action one-hot
@@ -60,7 +61,6 @@ class ObservationEncoder:
     def _encode_systems(self, obs: Observation, out: np.ndarray) -> None:
         my_pos = obs.position
         my_neighbors = set(obs.adjacency.get(my_pos, []))
-        candidates = set(obs.candidate_systems)
         binaries = set(obs.binary_systems)
         status_idx = {"STABLE": 0, "DESTABILIZING": 1, "SUPERNOVA": 2}
 
@@ -90,8 +90,11 @@ class ObservationEncoder:
             # positional flags
             out[base + 11] = 1.0 if s == my_pos else 0.0
             out[base + 12] = 1.0 if s in my_neighbors else 0.0
-            out[base + 13] = 1.0 if s in candidates else 0.0
+            # rival's exact system, only when known for certain (else all zero)
+            out[base + 13] = 1.0 if s == obs.rival_position else 0.0
             out[base + 14] = 1.0 if owner == obs.ship_id else 0.0  # (redundant-safe)
+            # the rival's last confirmed system (BFS seed for the belief)
+            out[base + 15] = 1.0 if s == obs.rival_last_seen else 0.0
 
     # -- global block --------------------------------------------------------
     def _encode_globals(self, obs: Observation, out: np.ndarray, offset: int) -> None:
@@ -106,7 +109,8 @@ class ObservationEncoder:
         out[i] = 1.0 if obs.rival_unlocked["proximity_alert"] else 0.0; i += 1
         out[i] = 1.0 if obs.rival_unlocked["long_range_scanners"] else 0.0; i += 1
         out[i] = 1.0 if obs.rival_unlocked["jamming"] else 0.0; i += 1
-        out[i] = len(obs.candidate_systems) / max(self.n_systems, 1); i += 1
+        out[i] = 1.0 if obs.rival_position is not None else 0.0; i += 1
+        out[i] = min(obs.rival_moves_since_seen / 10.0, 1.0); i += 1
         out[i] = min(obs.turn_number / 200.0, 1.0); i += 1
         me, them = obs.campaign_score[obs.ship_id], obs.campaign_score[1 - obs.ship_id]
         out[i] = float(np.clip((me - them) / 5.0, -1.0, 1.0)); i += 1

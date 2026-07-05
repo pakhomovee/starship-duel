@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/static/styles.css?v=3">
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -40,7 +40,7 @@
       <div class="watch-controls" id="watch-controls" hidden>
         <button id="btn-step" class="btn">Step ▷</button>
         <button id="btn-play" class="btn">Auto ▶</button>
-        <button id="btn-pause" class="btn" hidden>Pause ⏸</button>
+        <button id="btn-pause" class="btn" hidden>Stop ⏸</button>
         <label class="speed">Speed
           <input id="inp-speed" type="range" min="80" max="1200" value="500" step="20">
         </label>
@@ -70,6 +70,6 @@
   </aside>
 </main>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=3"></script>
 </body>
 </html>

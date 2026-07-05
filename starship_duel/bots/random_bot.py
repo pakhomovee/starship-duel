@@ -17,10 +17,11 @@ class RandomBot(Bot):
 
     def act(self, obs: Observation) -> Action:
         legal = obs.legal_actions
-        # Always take a guaranteed kill if we're sitting on the rival.
-        for a in legal:
-            if a.type is ActionType.FIRE and obs.candidate_systems == [obs.position]:
-                return a
+        # Always take a guaranteed kill if the rival is known to be right here.
+        if obs.rival_position == obs.position:
+            for a in legal:
+                if a.type is ActionType.FIRE:
+                    return a
         if self.rng.random() < self.end_turn_bias:
             return Action.end_turn()
         # Prefer not to end the turn purely at random most of the time.

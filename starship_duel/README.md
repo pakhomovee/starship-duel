@@ -53,11 +53,23 @@ uvicorn starship_duel.web.server:app --reload     # -> http://localhost:8000
 
 Pick controllers for P1/P2 (any registered bot, or `human`) and hit **New Game**.
 - **Human-vs-bot / hotseat:** the board shows *your* partial-information view —
-  the rival appears only as candidate-system halos until legitimately revealed;
-  click a glowing system (or an action button) to move.
+  the rival appears as candidate-system halos (both starting positions are
+  revealed, then re-hidden as ships move under cloak); click a glowing system
+  (or an action button) to move.
 - **Bot-vs-bot:** a spectator ("truth") view of both ships plus each side's
-  belief overlay; **Step** advances one action, **Auto** streams the game over a
-  WebSocket at an adjustable speed.
+  belief overlay.
+- **Step / Auto in every mode:** bot turns never auto-resolve on the server —
+  **Step** advances one bot action so you can watch it unfold (even in
+  human-vs-bot), and **Auto** streams over a WebSocket at an adjustable speed,
+  pausing when it's your turn.
+
+Bots include a **`deepseek`** controller that picks each move via the DeepSeek
+chat API — set `DEEPSEEK_API_KEY` in the environment (optionally `DEEPSEEK_MODEL`
+default `deepseek-chat`, `DEEPSEEK_TIMEOUT` default 20s). Without a key it
+transparently falls back to the heuristic bot, so matches always run — and it
+**logs** each decision (`starship_duel.bots.deepseek`): a loud warning if the key
+is missing, otherwise the request, latency, reply, and chosen action, visible in
+the server console.
 
 API surface: `POST /api/game`, `GET /api/game/{id}`, `POST …/action`,
 `POST …/step`, `POST …/reset`, and `WS /ws/watch/{id}` (`step`/`play`/`pause`).
@@ -138,8 +150,8 @@ class MyBot(Bot):
     def reset(self):        # optional: called at each skirmish start
         self.seen = None
     def act(self, obs):
-        # Fire if we're certain we're on the rival:
-        if obs.candidate_systems == [obs.position]:
+        # Fire if the rival is known to be right here:
+        if obs.rival_position == obs.position:
             return Action.fire()
         # otherwise fall back to anything legal:
         return obs.legal_actions[0]
@@ -151,9 +163,14 @@ Key `Observation` fields (see [`game/observation.py`](game/observation.py)):
 `position`, `cloaked`, `energy`, `banked_overcharge`, `actions_remaining`,
 `unlocked` (self-private); `system_owner`, `system_status`, `system_cache`,
 `adjacency`, `binary_systems`, `rival_unlocked`, `rival_last_action` (public);
-and **`candidate_systems`** — the rival's "could be here" set (a singleton when
-the rival's exact location is currently known). The rival's true position,
-energy and cloak are never exposed.
+and the hidden-info signals: **`rival_position`** — the rival's *exact* system,
+given only when known for certain (else `None`); **`rival_last_seen`** — the last
+system it was confirmed in; **`rival_moves_since_seen`** — an upper bound on hops
+travelled since. Those last two are exactly enough to re-run the reachability BFS
+yourself (`candidates ≈ systems within rival_moves_since_seen hops of
+rival_last_seen`); the fuzzy set itself is **not** handed over.
+`starship_duel.bots.BotBelief` does this BFS for you (used by the heuristic and
+DeepSeek bots) — feed it each `obs` and read `.candidates` / `.known_position()`.
 
 Return `Action.end_turn()` to pass early and **bank** unspent actions
 (`rollover = max(0, actions_remaining - 2)`, spec §5a).
@@ -168,25 +185,35 @@ stays selected until the engine flips `turn_ship` at end of turn.
 
 ## Belief tracking (the hidden-info layer)
 
-`BeliefTracker` maintains each observer's candidate set for the rival, fed **only
-public signals** (never ground truth). Because action *categories* are public
-(Jump/Hold/Claim/Fire are always distinguishable, spec §3), the number of JUMPs
-is known, so only JUMPs expand the set — tighter than a raw BFS-by-budget. The
-core invariant, enforced by a regression test over hundreds of games: **the
-rival's true system is always in the candidate set** (the belief may
-over-approximate but never wrongly rules out the truth).
+Two separate trackers, on purpose:
+
+- **Engine-side `BeliefTracker`** (in `game/belief.py`) maintains each observer's
+  candidate set from **all** public signals (it sees every action). It is **not**
+  handed to bots — it powers the web UI's "could be here" overlay. Core invariant,
+  regression-tested over hundreds of games: **the rival's true system is always in
+  the candidate set** (it may over-approximate, never wrongly rules out the truth).
+- **Bot-side `bots.BotBelief`** is what a bot uses to infer the rival itself. A bot
+  only sees the board on *its own* turns, so this tracker is deliberately
+  approximate: it collapses on a hard reveal (`obs.rival_position`), widens by the
+  rival's reach between turns, and re-seeds from freshly-claimed systems. Bots that
+  track smarter than this get a real edge.
+
+The observation only ever hands a bot the rival's **exact** system when it's known
+for certain (`obs.rival_position`); the fuzzy set is the bot's own problem.
 
 ## Resolved ambiguities & tunables
 
 The spec flags several items as fuzzy/TBD. Each is a **`GameConfig` field** with
 a documented default (`game/config.py`):
 
+- **End-of-turn forced fire** — `enable_forced_fire=False` (removed by default).
+  Under the spec (§5) a ship that ends its turn co-located with the rival is
+  auto-fired upon and loses; disabled here so a kill requires actively choosing
+  **FIRE** while co-located. Flip to `True` to restore the spec behavior.
 - **Long-Range Scanners vs. co-location reveal.** Default
   (`reveal_both_on_colocation_entry=False`): jumping onto the rival exposes only
   the *mover* (you trip the defender's alarm); LRS is what additionally reveals
-  the *defender to the mover*. This keeps hidden info meaningful — you can jump
-  onto a cloaked rival unknowingly and lose to the end-of-turn forced fire
-  (spec §5). Set `True` for the literal "both revealed" reading.
+  the *defender to the mover*. Set `True` for the literal "both revealed" reading.
 - **Supernova timing** — unspecified in the spec; `enable_supernova=False` by
   default for a clean, testable core. When enabled, systems destabilize →
   supernova probabilistically (`destabilize_prob`, `supernova_prob`); a ship
@@ -199,6 +226,19 @@ a documented default (`game/config.py`):
   (`cache_upgrade_period`, `cache_overcharge_transform_prob`) — turning them
   into juicy-but-exposing objectives worth fighting over. Binaries are excluded
   by default (`cache_spawn_in_binaries`) since they already pay via ownership.
+- **Deep Cloak** — makes a ship *undetectable* (immune to every exposure
+  trigger **and** to the end-of-turn forced fire, so it can sit in enemy
+  territory or end its turn on the rival unnoticed) for `deep_cloak_duration`
+  of its own turns (default **2**), counted down at the start of each of its
+  turns.
+- **Reveal initial positions** — `reveal_initial_positions=True` seeds each
+  side's belief with the rival's exact spawn (spec's "last confirmed position"
+  model), then it re-hides as ships move. Set `False` for maximal initial
+  uncertainty (belief seeded to the whole spawn-consistent set).
+- **Belief owned-system prune** — `belief_prune_owned=False`. Removing your
+  owned systems from a cloaked rival's candidate set *was* sound, but a
+  deep-cloaked ship can now sit in your territory undetected, so the prune would
+  violate the soundness invariant (true position always in the candidate set).
 - **Spawn constraints** — placeholder `min_hop_distance >= 2` plus a rough
   binary-distance balance (`maps.spawn_positions`), matching spec §7.5.
 - **Turn-cap timeout** — `turn_cap=200`, `timeout_resolution="draw"` (or

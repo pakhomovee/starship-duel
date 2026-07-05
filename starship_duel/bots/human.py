@@ -16,11 +16,10 @@ def render_observation(obs: Observation) -> str:
     lines.append(f"Your unlocks: {', '.join(k for k, v in obs.unlocked.items() if v) or 'none'}")
     lines.append(f"Rival unlocks: {', '.join(k for k, v in obs.rival_unlocked.items() if v) or 'none'}")
     lines.append(f"Rival last action: {obs.rival_last_action}")
-    if len(obs.candidate_systems) == 1:
-        lines.append(f"Rival KNOWN at: {obs.candidate_systems[0]}")
+    if obs.rival_position is not None:
+        lines.append(f"Rival KNOWN at: {obs.rival_position}")
     else:
-        lines.append(f"Rival could be in ({len(obs.candidate_systems)}): "
-                     f"{', '.join(obs.candidate_systems)}")
+        lines.append("Rival position: unknown (infer from the action log)")
     owned = [s for s, o in obs.system_owner.items() if o == obs.ship_id]
     rival_owned = [s for s, o in obs.system_owner.items() if o not in (None, obs.ship_id)]
     lines.append(f"You own: {', '.join(owned) or 'none'}")

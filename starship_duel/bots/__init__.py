@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import Callable, Dict
 
 from .base import Bot
+from .belief import BotBelief
+from .deepseek_bot import DeepSeekBot
 from .heuristic_bot import HeuristicBot
 from .human import HumanBot, render_observation
 from .random_bot import RandomBot
@@ -20,6 +22,7 @@ BotFactory = Callable[..., Bot]
 REGISTRY: Dict[str, BotFactory] = {
     "random": lambda seed=None: RandomBot(seed=seed),
     "heuristic": lambda seed=None: HeuristicBot(seed=seed),
+    "deepseek": lambda seed=None: DeepSeekBot(seed=seed),
     "human": lambda seed=None: HumanBot(),
 }
 
@@ -36,8 +39,10 @@ def make_bot(name: str, seed=None) -> Bot:
 
 __all__ = [
     "Bot",
+    "BotBelief",
     "RandomBot",
     "HeuristicBot",
+    "DeepSeekBot",
     "HumanBot",
     "render_observation",
     "REGISTRY",
