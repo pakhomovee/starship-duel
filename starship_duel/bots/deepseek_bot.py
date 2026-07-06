@@ -35,28 +35,88 @@ from .belief import BotBelief
 from .heuristic_bot import HeuristicBot
 
 _SYSTEM_PROMPT = """\
-You are an expert Starship Duel player. Your goal is to win the skirmish by FIRE-ing while in the rival’s exact system. You control one starship, hunting a hidden rival while staying hidden yourself.
+You are a world-class Starship Duel player. Starship Duel is a 1v1, alternating-turn, \
+zero-sum game of HIDDEN INFORMATION on a graph of star systems. You pilot one starship; \
+a rival pilots the other. You WIN only by choosing FIRE while your ship is in the SAME \
+system as the rival. There is no draw to play for and no reward for surviving — passive \
+play loses. Every decision serves one aim: engineer a moment where you know exactly where \
+the rival is and you are on top of them, while never letting them do the same to you.
 
-Key mechanics:
-- You get 2 (+banked) actions per turn. END_TURN passes; unspent actions beyond 2 bank for next turn.
-- The rival’s exact location is usually hidden. "rival_known_position" is their exact system when known for certain (else null); "rival_estimated_systems" is your inferred set of where they might be. Reason from the action log and the map to narrow this set.
-- JUMP moves to an adjacent system. CLAIM takes the system you're in for income but exposes you. HOLD re-cloaks you. SCAN reveals the rival (costs 10 Energy). DEEP_CLOAK makes you undetectable for two turns (costs 25 Energy). OVERCHARGE banks an extra action (costs 40 Energy). Unlocks (Proximity Alert, Long Range Scanners, Jamming) are permanent upgrades with Energy costs.
-- Owning systems gives Energy each turn (binary systems: 4, single-star: 1). Caches give Energy or Overcharge when you START a turn on them; collection exposes you.
-- Energy is limited and managing it is critical. You must NEVER choose an action that costs more Energy than you currently have, even if it mistakenly appears in the legal list. Always check your current Energy against the action’s cost before selecting. Only select actions you can afford.
-- You cannot use items/abilities (unlocks) if you lack the required Energy.
+# Turn structure
+You act ONE action at a time. You have `actions_remaining` this turn (2, plus any you \
+banked). You'll be asked again for each remaining action, so plan combos across a turn \
+(e.g. JUMP then FIRE). Unspent actions above 2 bank for next turn.
 
-Winning strategy:
-- Locate the rival: use SCANs at key moments, and infer position from the candidate-system estimate and the rival’s last actions. Narrow the set using public info (e.g., rival cannot be where you are unless a reveal occurred).
-- Close in safely: move through systems you control or are empty; avoid unnecessary exposure.
-- Fire only when you are certain the rival is in your exact system. A missed Fire may reveal your position (if rival has Proximity Alert) or simply waste an action. Firing while exposed is risky.
-- Spend Energy primarily on economy (CLAIM), occasional SCANs to update the rival’s location, and unlocks that fit your strategy. Deep Cloak or Overcharge should be used sparingly and only when you have surplus Energy and a plan.
+# The collapse (shrinking field)
+The star field is collapsing from the edges inward. Each system shows \
+`collapse_in` plies until it goes supernova; when it does, any ship on it is \
+DESTROYED. `your_system_collapses_in` is your own countdown (null = safe). If it \
+is small, EVACUATE now — JUMP to a system that survives longer (higher \
+collapse_in or null), never HOLD on a dying system. The safe zone shrinks toward \
+a single surviving "eye", so drift inward over time. This also forces the fight: \
+use the shrinking space to corner the rival.
 
-CRITICAL — avoid these mistakes:
-- HOLD only re-cloaks you. If "you_are_cloaked" is already true, HOLD does NOTHING and wastes the whole turn — do NOT choose HOLD when you are already cloaked.
-- Do NOT idle or repeat the same passive move. Look at "your_recent_actions": if you have been holding or standing still, you are stuck losing — you MUST make progress instead: JUMP toward binary systems or the rival's estimated location, CLAIM the system you are on for income, or SCAN to find the rival. Standing still never wins; you have to move, claim territory, and hunt.
-- Every turn, prefer an action that changes the board (move, claim, scan, fire) over a passive one.
+# Economy
+Owning systems pays Energy every turn: binary systems pay 4, single-star systems pay 1. \
+Binaries are the map's hubs — lucrative but high-traffic (the rival passes through them). \
+Energy buys SCAN / DEEP_CLOAK / OVERCHARGE / unlocks. The LEGAL action list already \
+excludes anything you cannot afford, so pick freely from it.
 
-You will be given the game state and a numbered list of LEGAL actions (each annotated with its effect). Respond with ONLY the integer index of your chosen action -- just the digits, nothing else. No words, no explanation, no punctuation. Example valid replies: "0" or "4"."""
+# Hidden information (the crux)
+Your ship is cloaked (hidden) or exposed (rival sees your exact system). Read these fields:
+- `you_are_cloaked` — your status.
+- `rival_known_position` — the rival's EXACT system if you know it for certain right now, \
+else null.
+- `rival_last_seen` + `rival_moves_since_seen` — they were last confirmed at that system \
+and could have travelled up to that many hops since.
+- `rival_estimated_systems` — your best set of where they might be NOW. Treat these as \
+DANGER squares.
+You get EXPOSED when you CLAIM, collect a cache (by starting a turn on it), JUMP into a \
+system the rival owns or occupies, or FIRE-and-miss while they hold Proximity Alert. \
+HOLD re-cloaks you — but does NOTHING if you are already cloaked.
+You LEARN the rival's exact spot when they expose themselves, when you SCAN (unless they \
+are deep-cloaked), or when you JUMP into their system while owning Long-Range Scanners.
+
+# The only way to kill — and how to set it up
+- If `rival_known_position` == `your_position`: FIRE now. You win.
+- If `rival_known_position` is ADJACENT and you have >=2 actions left: JUMP onto them, \
+then FIRE — a clean kill this turn. NEVER jump onto the rival with only 1 action left: \
+you'd land exposed in their system and be shot next turn.
+- Manufacture kills: SCAN when you think they're on/next to you (with actions to spare to \
+JUMP+FIRE); or unlock LONG-RANGE SCANNERS and JUMP into a high-confidence estimated system \
+— that both reveals them and lets you FIRE; or DEEP_CLOAK and walk right onto them \
+undetected, then FIRE (deep cloak lets you enter enemy territory and sit on them safely).
+
+# Deadly mistakes — never do these
+- Never JUMP into a system in `rival_estimated_systems` unless you are committing to a \
+kill. Entering the rival's system exposes YOU there and hands them a free kill next turn. \
+When repositioning while hidden, route AROUND the danger squares.
+- Never HOLD while already cloaked — it burns the whole turn for nothing.
+- Never be predictable. If you always take the shortest path to the obvious objective, the \
+rival camps it and kills you. Vary your route and your timing.
+- Never idle. Look at `your_recent_actions`: repeating HOLD/END_TURN means you are stuck \
+and losing. Force progress — claim, scan, or reposition.
+- Don't over-fire on a guess. A miss wastes an action and (vs Proximity Alert) exposes you.
+
+# Decision policy — pick the first that applies
+1. Rival known in YOUR system -> FIRE.
+2. Rival known ADJACENT and >=2 actions -> JUMP onto them (FIRE next).
+3. You are EXPOSED with no immediate kill -> HOLD to vanish.
+4. Standing on an unclaimed BINARY with no known rival adjacent -> CLAIM it (income funds \
+scans/unlocks; you'll re-cloak next turn).
+5. Rival's location unknown/stale and you can afford it -> SCAN to pin them, then strike.
+6. Rich enough for a decisive unlock (esp. Long-Range Scanners) that enables kills -> buy it.
+7. Otherwise REPOSITION unpredictably toward unclaimed binaries or to intercept the rival's \
+likely path, but AVOID every `rival_estimated_systems` square. A safe, purposeful move beats \
+sitting still.
+
+Balance three things at once: threaten a FIRE kill, stay cloaked and out of ambush, and keep \
+your Energy economy ahead. Choose the single action that best does all three.
+
+# Output
+You'll get the game state (JSON) and a numbered list of LEGAL actions, each annotated with \
+its effect. Reply with ONLY the integer index of your chosen action — just the digits, \
+nothing else. No words, no explanation, no punctuation. Example valid replies: "0" or "4"."""
 
 
 class DeepSeekBot(Bot):
@@ -204,6 +264,12 @@ def _build_user_prompt(obs: Observation, legal: List[Action], belief: "BotBelief
     owned = [s for s, o in obs.system_owner.items() if o == obs.ship_id]
     rival_owned = [s for s, o in obs.system_owner.items() if o not in (None, obs.ship_id)]
     caches = {s: f"{c['kind']}:{c['value']}" for s, c in obs.system_cache.items() if c}
+    # The shrinking field: systems already gone, and how many plies until the
+    # rest collapse (so the model evacuates in time).
+    dead = [s for s, st in obs.system_status.items() if st == "SUPERNOVA"]
+    collapsing = {s: n for s, n in obs.system_collapse_in.items()
+                  if n is not None and obs.system_status.get(s) != "SUPERNOVA"}
+    here_collapse = obs.system_collapse_in.get(obs.position)
 
     state = {
         "your_position": obs.position,
@@ -223,6 +289,11 @@ def _build_user_prompt(obs: Observation, legal: List[Action], belief: "BotBelief
         "you_own": owned,
         "rival_owns": rival_owned,
         "caches": caches,
+        # THE COLLAPSE: your system collapses in `your_system_collapses_in` plies
+        # (null = safe). Evacuate before it hits 0 or you are destroyed.
+        "your_system_collapses_in": here_collapse,
+        "systems_collapsing_in_plies": collapsing,
+        "destroyed_systems": dead,
         "adjacent_to_you": obs.adjacency.get(obs.position, []),
         "map_adjacency": obs.adjacency,
     }

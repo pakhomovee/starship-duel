@@ -90,6 +90,8 @@ select, input {
   paint-order: stroke; stroke: #06040f; stroke-width: 4px; pointer-events: none;
 }
 .sys-sub { font: 700 10px 'JetBrains Mono'; fill: var(--gold); text-anchor: middle; pointer-events: none; }
+.sys-warn { font: 800 13px 'Baloo 2', sans-serif; fill: var(--danger); text-anchor: middle; pointer-events: none;
+  paint-order: stroke; stroke: #06040f; stroke-width: 4px; }
 .node-jumpable { filter: drop-shadow(0 0 10px var(--cyan)); }
 .jump-ring { fill: none; stroke: var(--cyan); stroke-width: 3.5; stroke-dasharray: 6 7; opacity: .9; }
 .candidate-halo { animation: pulse 1.8s ease-in-out infinite; }

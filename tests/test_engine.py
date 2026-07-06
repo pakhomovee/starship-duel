@@ -16,6 +16,9 @@ from starship_duel.run import play_skirmish
 
 
 def fresh_engine(**cfg):
+    # Disable the shrinking field by default so per-mechanic unit tests aren't
+    # perturbed by systems collapsing; the shrink has its own tests below.
+    cfg.setdefault("shrink_enabled", False)
     e = Engine(config=GameConfig(**cfg), seed=1)
     e.reset(map_id="reference", first_ship=0)
     return e
@@ -259,6 +262,80 @@ class TestBeliefSoundness(unittest.TestCase):
                     self.assertIn(st.ships[1 - o].position, env.engine.belief[o].candidates)
                 env.step(bots[agent_id(a)].act(env.observe(a)))
                 steps += 1
+
+
+class TestShrinkingField(unittest.TestCase):
+    def test_schedule_is_ordered_outside_in(self):
+        e = Engine(config=GameConfig(), seed=3)
+        e.reset(map_id="reference")
+        center = e._shrink_center
+        # The eye (center) collapses last; farther systems collapse earlier.
+        last = max(e._supernova_turn, key=lambda s: e._supernova_turn[s])
+        self.assertEqual(last, center)
+        far = max(e.map.systems, key=lambda s: e.map.hop_distance(center, s))
+        self.assertLessEqual(e._supernova_turn[far], e._supernova_turn[center])
+
+    def test_ship_dies_on_supernova(self):
+        e = Engine(config=GameConfig(), seed=1)
+        e.reset(map_id="reference", first_ship=0)
+        s = e.current_ship
+        # Make this ship's system collapse at the very next turn-start, and
+        # keep the rival's system safe so only ``s`` is caught.
+        pos = e.state.ships[s].position
+        for name in e.map.systems:
+            e._supernova_turn[name] = 999
+        e._supernova_turn[pos] = e.state.turn_number + 1
+        e.apply_action(Action.end_turn())          # s ends -> rival start collapses pos
+        self.assertTrue(e.state.done)
+        self.assertEqual(e.state.end_reason, "supernova")
+        self.assertEqual(e.state.winner, 1 - s)
+
+    def test_all_games_end_within_the_cap(self):
+        # With the collapse on, every game must resolve well before the turn cap.
+        longest = 0
+        for seed in range(60):
+            res = play_skirmish(make_bot("random"), make_bot("random"), seed=seed)
+            self.assertTrue(res["end_reason"])
+            longest = max(longest, res["turns"])
+        self.assertLess(longest, 120)  # collapse forces resolution ~turn 96
+
+    def test_survivors_stay_connected(self):
+        # The non-collapsed field must remain connected at every step, so a ship
+        # can always reach the shrinking core (never stranded by disconnection).
+        for seed in range(20):
+            e = Engine(config=GameConfig(), seed=seed)
+            e.reset(map_id="reference")
+            adj = e.map.adjacency
+            last = max(e._supernova_turn.values())
+            for turn in range(last + 1):
+                survivors = {s for s in e.map.systems if e._supernova_turn[s] > turn}
+                if len(survivors) <= 1:
+                    continue
+                start = next(iter(survivors))
+                seen, stack = {start}, [start]
+                while stack:
+                    for m in adj[stack.pop()]:
+                        if m in survivors and m not in seen:
+                            seen.add(m); stack.append(m)
+                self.assertEqual(seen, survivors, f"disconnected @turn {turn} seed {seed}")
+
+    def test_warns_before_collapsing(self):
+        # A system spends the warning window DESTABILIZING (with a countdown)
+        # before it goes supernova -- 6 plies = 3 turns of notice per player.
+        e = Engine(config=GameConfig(), seed=1)
+        e.reset(map_id="reference")
+        first = min(e._supernova_turn, key=lambda s: e._supernova_turn[s])
+        T = e._supernova_turn[first]
+        self.assertEqual(e.config.shrink_warning, 6)
+        self.assertEqual(e._destabilize_turn[first], T - 6)
+        for turn in range(T - e.config.shrink_warning, T + 1):
+            e.state.turn_number = turn
+            e._advance_system_status()
+            if turn < T:
+                self.assertEqual(e.state.system_status[first].value, "DESTABILIZING")
+                self.assertEqual(e.collapse_in(first), T - turn)
+            else:
+                self.assertEqual(e.state.system_status[first].value, "SUPERNOVA")
 
 
 class TestSmoke(unittest.TestCase):

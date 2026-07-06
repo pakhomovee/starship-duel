@@ -13,6 +13,7 @@ import threading
 from typing import Dict, List, Optional
 
 from ..bots import Bot, make_bot
+from ..bots.base import BotError
 from ..env import StarshipDuelEnv
 from ..game import Action, ActionType, GameConfig, build_observation
 
@@ -99,7 +100,13 @@ class GameSession:
         ship = self.current_ship
         bot = self.bots[ship]
         obs = build_observation(self.env.engine, ship)
-        action = bot.act(obs)
+        try:
+            action = bot.act(obs)
+        except BotError as e:
+            # A crashing bot automatically loses.
+            self.env.engine.forfeit(ship, reason="crash")
+            self.events.append(f"ship{ship} crashed ({e}) — forfeits")
+            return list(self.events[-1:])
         return self._step(action)
 
     def recent_events(self, limit: int = 40) -> List[str]:

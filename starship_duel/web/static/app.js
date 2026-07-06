@@ -194,6 +194,11 @@ function renderBoard(v) {
     if (s.owner !== null && s.owner !== undefined)
       g.appendChild(centered(s.owner === 0 ? "flag-p1" : "flag-p2", s.x - ssz * 0.40, s.y - ssz * 0.36, 26));
 
+    // collapse early-warning: a countdown on a system about to go supernova
+    if (s.status === "DESTABILIZING" && s.collapse_in != null) {
+      g.appendChild(text(s.x, s.y - ssz / 2 - 6, `⚠ ${s.collapse_in}`, "sys-warn"));
+    }
+
     // label
     g.appendChild(text(s.x, s.y + ssz / 2 + 15, s.name, "sys-label"));
 

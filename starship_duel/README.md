@@ -20,19 +20,45 @@ starship_duel/
     belief.py       # per-observer "could be here" candidate-set tracker
     observation.py  # partial-info Observation built per ship (spec §3)
   env.py            # StarshipDuelEnv — PettingZoo-style AEC wrapper (stdlib)
-  bots/             # Bot interface + random / heuristic / human + registry
-  run.py            # match orchestration + CLI (the three play modes)
+  bots/             # Bot interface + random / heuristic / deepseek / human + belief
+  run.py            # match orchestration + CLI (name or 'cmd:<program>' bots)
   rl/               # ── RL adapters (numpy/gymnasium/pettingzoo) ──
     action_coding.py  # flat Discrete action space <-> Action + legal mask
     encoders.py       # Observation -> fixed-size float32 vector
     pettingzoo_env.py # AECEnv for masked self-play (passes pettingzoo api_test)
+  arena/            # ── isolated subprocess bots (competition ladder) ──
+    protocol.py       # JSON-line wire format (encode request / parse reply)
+    subprocess_bot.py # spawns + referees an external program as a Bot
+    sdk/python/       # standalone Python SDK + example bot
+    sdk/cpp/          # single-header C++ SDK (nlohmann/json) + example bot
   web/              # ── self-hosted UI (fastapi + uvicorn) ──
     server.py         # REST + WebSocket, serves the static frontend
     session.py        # in-memory games; human input + bot auto-play/stepping
     serialize.py      # game state -> JSON view (player perspective vs. truth)
     static/           # index.html, app.js, styles.css, sprites.svg
-tests/                # test_engine.py (core) + test_rl_web.py (rl/web smoke)
+tests/                # test_engine.py, test_rl_web.py, test_arena.py
 ```
+
+## The collapse (shrinking field)
+
+To keep games bounded, the star field **collapses over time**: starting at
+`shrink_start_turn` (24), one system every `shrink_interval` (6) plies goes
+supernova, from the outside in toward a random surviving "eye" — a ship caught on
+a supernova system is destroyed. This squeezes the two ships together so **every
+game ends in ≤~96 plies (~48 turns each)**: competitive bots resolve by combat
+much sooner; passive ones get forced together or perish in the collapse.
+
+- **Advance warning.** A system spends `shrink_warning` (6) plies DESTABILIZING
+  before it goes SUPERNOVA — **3 turns of notice** for each player. The exact
+  countdown is surfaced as `system_collapse_in` (plies to supernova) in every
+  observation and the arena protocol, and as a **`⚠ N` badge** in the web UI.
+- **Connectivity preserved.** Collapsing strictly farthest-from-eye first keeps
+  the surviving field connected at every step (the survivors are always a ball
+  around the eye), so a ship can always reach the shrinking core — never
+  stranded by disconnection. (Proven; regression-tested.)
+
+All tunable in `GameConfig` (`shrink_enabled`, `shrink_start_turn`,
+`shrink_interval`, `shrink_warning`).
 
 ## Install (for the web UI + RL)
 
@@ -96,6 +122,43 @@ positions/maps). Swap in your own policy; mask the logits with `action_mask`.
 
 `ActionCodec` / `ObservationEncoder` (in `rl/`) are usable standalone if you
 prefer a different training harness (e.g. a custom PPO or the raw `env.py`).
+
+## Arena — external bots in any language
+
+For a competition ladder, bots run as **isolated subprocesses** over a
+language-agnostic **JSON-line protocol** (the Battlesnake / Halite / CodinGame
+pattern), kept separate from the raw-throughput RL loop. Each bot is spawned once
+per game with persistent stdin/stdout pipes, so it keeps its own memory across
+turns; the engine stays authoritative and validates every reply — a timeout,
+crash, malformed line, or illegal move never takes the match down (it substitutes
+a safe default and logs a *strike*).
+
+```
+engine → bot   {"type":"act","turn":12,"you":{...},"rival":{...},"systems":{...},
+                "legal_actions":[{"action":"JUMP","target":"Halcyon Binary"},{"action":"HOLD"},...]}
+bot   → engine  {"action":"JUMP","target":"Halcyon Binary"}          # or {"index": 0}
+```
+
+The engine validates every reply: a **timeout** or **malformed/illegal** move is
+a graceful *strike* (safe default substituted), but a **runtime crash** (the bot
+process dies) is an **automatic loss** — so a broken submission can't limp
+through. Run any program as a bot with the `cmd:` prefix:
+
+```bash
+python -m starship_duel.run --bot0 heuristic \
+    --bot1 "cmd:python starship_duel/arena/sdk/python/example_bot.py"
+
+# C++ bot (needs nlohmann/json):
+g++ -std=c++17 -O2 starship_duel/arena/sdk/cpp/example_bot.cpp -o mybot
+python -m starship_duel.run --bot0 heuristic --bot1 "cmd:./mybot"
+```
+
+Thin, copy-pasteable SDKs remove the boilerplate — write one `decide(request) ->
+action` function: a ~30-line Python helper (`arena/sdk/python/starship_sdk.py`)
+and a single-header C++ SDK (`arena/sdk/cpp/starship_bot.hpp`). Any language that
+can read a line and parse JSON works. A trained PPO/NFSP policy wrapped behind the
+same protocol is just another entry in the same ladder — no special-casing, and a
+sterner strength check than self-play mirrors.
 
 ## Quick start
 
@@ -214,10 +277,11 @@ a documented default (`game/config.py`):
   (`reveal_both_on_colocation_entry=False`): jumping onto the rival exposes only
   the *mover* (you trip the defender's alarm); LRS is what additionally reveals
   the *defender to the mover*. Set `True` for the literal "both revealed" reading.
-- **Supernova timing** — unspecified in the spec; `enable_supernova=False` by
-  default for a clean, testable core. When enabled, systems destabilize →
-  supernova probabilistically (`destabilize_prob`, `supernova_prob`); a ship
-  caught on a collapsing star at end of turn is destroyed.
+- **The collapse (supernova timing)** — unspecified in the spec, so implemented
+  as a **deterministic shrinking field** (`shrink_enabled=True`) that bounds
+  game length: systems collapse outside-in on a fixed schedule
+  (`shrink_start_turn`, `shrink_interval`, `shrink_warning`) toward a random eye,
+  and a ship caught on a supernova system is destroyed. See "The collapse" above.
 - **Cache economy** — the spec's pseudocode spawns a cache in *every* empty
   system every tick, which floods the map with energy and kills all scarcity.
   Instead caches are a small **contested pool**: at most `max_active_caches`

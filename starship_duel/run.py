@@ -11,6 +11,7 @@ import argparse
 from typing import Dict, List, Optional
 
 from .bots import Bot, make_bot
+from .bots.base import BotError
 from .env import StarshipDuelEnv, agent_id
 from .game import GameConfig
 
@@ -46,7 +47,14 @@ def play_skirmish(
         agent = env.agent_selection
         sid = agent_id(agent)
         obs = env.observe(agent)
-        action = bots[sid].act(obs)
+        try:
+            action = bots[sid].act(obs)
+        except BotError as e:
+            # A bot that crashes at runtime automatically loses.
+            env.engine.forfeit(sid, reason="crash")
+            if render:
+                print(f"  ship{sid} crashed: {e} -> forfeits")
+            break
         env.step(action)
         if render:
             for ev in env.last_events:
@@ -64,7 +72,12 @@ def play_skirmish(
         "actions": steps,
         "campaign_score": list(st.campaign_score),
         "map_id": st.map_id,
+        "strikes": [getattr(b, "strikes", 0) for b in (bot0, bot1)],
     }
+    # Tidy up any external subprocess bots (leave in-process bots alone).
+    for b in (bot0, bot1):
+        if hasattr(b, "close"):
+            b.close()
     if render:
         print(f"# result: winner={result['winner']} ({result['end_reason']}) "
               f"in {result['turns']} turns")
@@ -105,10 +118,21 @@ def play_campaign(
     }
 
 
+def build_bot(spec: str, seed: Optional[int] = None) -> Bot:
+    """Construct a bot from a CLI spec: a registered name, or ``cmd:<command>``
+    to run an external program as a subprocess bot over the JSON protocol."""
+    if spec.startswith("cmd:"):
+        from .arena import SubprocessBot
+        return SubprocessBot(spec[len("cmd:"):], name=spec, seed=seed)
+    return make_bot(spec, seed=seed)
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     p = argparse.ArgumentParser(description="Run Starship Duel skirmishes.")
-    p.add_argument("--bot0", default="heuristic", help="bot name for ship 0")
-    p.add_argument("--bot1", default="random", help="bot name for ship 1")
+    p.add_argument("--bot0", default="heuristic",
+                   help="bot name, or 'cmd:<command>' to run an external bot")
+    p.add_argument("--bot1", default="random",
+                   help="bot name, or 'cmd:<command>' to run an external bot")
     p.add_argument("--games", type=int, default=1, help="number of skirmishes")
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--map", dest="map_id", default=None, help="force a map id")
@@ -121,8 +145,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
                         format="%(levelname)s [%(name)s] %(message)s")
 
-    bot0 = make_bot(args.bot0, seed=args.seed)
-    bot1 = make_bot(args.bot1, seed=None if args.seed is None else args.seed + 1)
+    bot0 = build_bot(args.bot0, seed=args.seed)
+    bot1 = build_bot(args.bot1, seed=None if args.seed is None else args.seed + 1)
     render = args.render and not args.quiet
 
     if args.games == 1:

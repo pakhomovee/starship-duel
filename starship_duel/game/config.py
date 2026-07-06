@@ -47,11 +47,18 @@ class GameConfig:
     cache_overcharge_transform_prob: float = 0.2  # rarer outcome (TBD in spec)
     cache_spawn_in_binaries: bool = False  # binaries already pay via ownership
 
-    # -- system status / supernova (spec 5) ---------------------------------
-    # Timing unspecified in the spec; default OFF for a clean, testable core.
-    enable_supernova: bool = False
-    destabilize_prob: float = 0.02      # per stable, unoccupied system per tick
-    supernova_prob: float = 0.5         # destabilizing -> supernova per tick
+    # -- the collapse: a shrinking field (bounds game length) ---------------
+    # Systems collapse into supernovae on a deterministic schedule, from the
+    # outside in toward a random surviving "eye", forcing the two ships together
+    # so every game resolves in ~100 plies (~50 turns each) instead of dragging
+    # on.  A system first DESTABILIZES (a warning to evacuate) then goes
+    # SUPERNOVA; a ship caught on a supernova system is destroyed.
+    shrink_enabled: bool = True
+    shrink_start_turn: int = 24     # ply at which the first (outermost) system goes
+    shrink_interval: int = 6        # plies between successive system collapses
+    # Plies a system spends DESTABILIZING (visibly warning) before it goes
+    # supernova.  6 plies = 3 of EACH player's own turns of advance notice.
+    shrink_warning: int = 6
 
     # End-of-turn forced fire (spec 5): if a ship ends its turn co-located with
     # the rival without having FIRE-d, the rival auto-fires and the mover loses.

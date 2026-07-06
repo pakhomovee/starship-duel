@@ -28,6 +28,10 @@ class Observation:
     system_owner: Dict[System, Optional[ShipId]]
     system_status: Dict[System, str]
     system_cache: Dict[System, Optional[dict]]  # {"kind":..., "value":...} or None
+    # Early-warning countdown: plies until each system goes supernova (0 =
+    # collapsing now, None = not scheduled).  A system also shows DESTABILIZING
+    # in ``system_status`` for the final ``shrink_warning`` plies before it goes.
+    system_collapse_in: Dict[System, Optional[int]]
     campaign_score: List[int]
     skirmish_number: int
     turn_ship: ShipId
@@ -102,6 +106,8 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
     for s, c in st.system_cache.items():
         cache_view[s] = None if c is None else {"kind": c.kind.value, "value": c.value}
 
+    collapse_in = {s: engine.collapse_in(s) for s in st.system_status}
+
     return Observation(
         ship_id=ship,
         map_id=st.map_id,
@@ -110,6 +116,7 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
         system_owner=dict(st.system_owner),
         system_status={s: v.value for s, v in st.system_status.items()},
         system_cache=cache_view,
+        system_collapse_in=collapse_in,
         campaign_score=list(st.campaign_score),
         skirmish_number=st.skirmish_number,
         turn_ship=st.turn_ship,

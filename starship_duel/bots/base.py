@@ -21,6 +21,12 @@ from typing import Optional
 from ..game import Action, Observation
 
 
+class BotError(Exception):
+    """Raised by a bot that has failed catastrophically (e.g. an arena
+    subprocess crashed).  Match orchestration treats this as an automatic loss
+    for that bot, rather than substituting a default move."""
+
+
 class Bot:
     #: Human-readable name; override or pass to ``__init__``.
     name: str = "bot"

@@ -74,6 +74,7 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
             "owner": st.system_owner.get(name),
             "status": st.system_status[name].value,
             "cache": None if cache is None else {"kind": cache.kind.value, "value": cache.value},
+            "collapse_in": eng.collapse_in(name),  # plies to supernova (early warning)
         })
 
     edges = []

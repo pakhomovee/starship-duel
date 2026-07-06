@@ -81,6 +81,9 @@ class Engine:
         self._last_seen_pos: List[Optional[System]] = [None, None]
         self._rival_turns_unseen: List[int] = [0, 0]
 
+        # Precompute the shrinking-field collapse schedule for this skirmish.
+        self._plan_collapse(gmap)
+
         # Seed each observer's belief.  By default both initial positions are
         # revealed, so belief starts pinned to the rival's exact spawn and
         # re-expands as they move under cloak (spec's "last confirmed position"
@@ -111,6 +114,48 @@ class Engine:
         }
         return candidates or {s for s in self.map.systems if s != own_pos}
 
+    def _plan_collapse(self, gmap: GameMap) -> None:
+        """Assign each system the ply it goes SUPERNOVA (and, ``shrink_warning``
+        plies earlier, DESTABILIZING).  Systems collapse outside-in toward a
+        random surviving "eye", one every ``shrink_interval`` plies.
+
+        Collapsing strictly farthest-from-eye first keeps the surviving field
+        **connected** at every step: the survivors are always the full ball of
+        systems within some radius r of the eye, plus a partial next ring; the
+        ball is connected, and every partial-ring survivor still connects to a
+        radius-(r-1) system that also survives.  So a ship can always reach the
+        shrinking core (and never gets stranded by disconnection)."""
+        cfg = self.config
+        self._supernova_turn: Dict[System, int] = {}
+        self._destabilize_turn: Dict[System, int] = {}
+        self._shrink_center: Optional[System] = None
+        if not cfg.shrink_enabled:
+            return
+        systems = gmap.systems
+        center = self.rng.choice(systems)
+        self._shrink_center = center
+        # Farthest-from-eye collapses first; random tiebreak within a ring so the
+        # order (and thus the endgame arena) varies between games.
+        order = sorted(systems, key=lambda s: (-gmap.hop_distance(center, s), self.rng.random()))
+        for k, sysname in enumerate(order):
+            t = cfg.shrink_start_turn + k * cfg.shrink_interval
+            self._supernova_turn[sysname] = t
+            self._destabilize_turn[sysname] = t - cfg.shrink_warning
+
+    def collapse_in(self, system: System) -> Optional[int]:
+        """Plies until ``system`` goes supernova (0 = collapsing now); ``None``
+        if it is not scheduled or the shrink is disabled.  This is the public
+        early-warning countdown surfaced to players and bots."""
+        if not self.config.shrink_enabled or system not in self._supernova_turn:
+            return None
+        remaining = self._supernova_turn[system] - self.state.turn_number
+        return max(remaining, 0)
+
+    def forfeit(self, loser: ShipId, reason: str = "forfeit") -> None:
+        """End the skirmish with ``loser`` losing (e.g. its bot process crashed)."""
+        if not self.state.done:
+            self._win(other(loser), reason, [])
+
     # -------------------------------------------------------------- accessors
     @property
     def current_ship(self) -> ShipId:
@@ -128,17 +173,16 @@ class Engine:
         cfg = self.config
         owner = st.system_owner
         status = st.system_status
-        supernova = cfg.enable_supernova
 
         actions: List[Action] = []
 
-        # JUMP to each neighbour (never into an active supernova).
+        # JUMP to each neighbour (never into a collapsed/supernova system).
         for dest in self.map.neighbors(pos):
-            if supernova and status[dest] is SystemStatus.SUPERNOVA:
+            if status[dest] is SystemStatus.SUPERNOVA:
                 continue
             actions.append(Action.jump(dest))
 
-        pos_supernova = supernova and status[pos] is SystemStatus.SUPERNOVA
+        pos_supernova = status[pos] is SystemStatus.SUPERNOVA
 
         # HOLD: current system not rival-claimed, and not forced to flee.
         if owner[pos] != other(s) and not pos_supernova:
@@ -365,10 +409,18 @@ class Engine:
         events.append(f"ship{observer} detects rival at {rival.position} ({reason})")
 
     # ----------------------------------------------------------- turn lifecycle
-    def _start_turn(self, s: ShipId) -> None:
+    def _start_turn(self, s: ShipId, events: Optional[List[str]] = None) -> None:
         st = self.state
         cfg = self.config
         ship = st.ships[s]
+        if events is None:
+            events = []
+
+        # The field collapses at the start of the turn; a ship stranded on a
+        # system that just went supernova is destroyed (game over).
+        self._advance_system_status()
+        if self._check_collapse_deaths(events):
+            return
 
         # Income from owned systems.
         income = 0
@@ -395,8 +447,6 @@ class Engine:
             st.system_cache[ship.position] = None
             self._expose(s, [], reason="cache collection")
 
-        self._advance_system_status()
-
     def _collect_cache(self, s: ShipId, cache: Cache) -> None:
         ship = self.state.ships[s]
         if cache.kind is CacheKind.ENERGY:
@@ -421,11 +471,6 @@ class Engine:
         if not self.belief[rival_id].is_pinned:
             self._rival_turns_unseen[rival_id] += 1
 
-        # Supernova destruction: caught on a collapsing star at end of turn.
-        if cfg.enable_supernova and st.system_status[ship.position] is SystemStatus.SUPERNOVA:
-            self._win(rival_id, "supernova", events)
-            return
-
         # Optional forced fire on end-of-turn co-location (spec 5): the mover who
         # did not fire is the one fired upon -- unless deep-cloaked.  Disabled by
         # default (a kill requires actively choosing FIRE).
@@ -441,7 +486,7 @@ class Engine:
             return
 
         st.turn_ship = rival_id
-        self._start_turn(rival_id)
+        self._start_turn(rival_id, events)
 
     def _win(self, winner: ShipId, reason: str, events: List[str]) -> None:
         st = self.state
@@ -472,7 +517,7 @@ class Engine:
 
     # ------------------------------------------------------- world dynamics
     def _advance_system_status(self) -> None:
-        """Optional supernova progression, cache escalation, and capped spawns.
+        """The collapse (deterministic schedule), cache escalation, and spawns.
 
         Rather than filling every empty system (spec 5b's naive pseudocode),
         we keep a small contested pool: existing caches escalate in value, and
@@ -480,16 +525,19 @@ class Engine:
         """
         st = self.state
         cfg = self.config
-        occupied = {st.ships[0].position, st.ships[1].position}
 
-        # 1) Supernova ticks (a collapsing star clears any cache on it).
-        if cfg.enable_supernova:
+        # 1) Shrinking field: set each system's status from the fixed schedule
+        #    (a collapsing star clears any cache on it).
+        if cfg.shrink_enabled:
+            turn = st.turn_number
             for sysname in self.map.systems:
-                if sysname in occupied:
-                    continue
-                self._tick_supernova(sysname)
-                if st.system_status[sysname] is SystemStatus.SUPERNOVA:
+                if turn >= self._supernova_turn[sysname]:
+                    st.system_status[sysname] = SystemStatus.SUPERNOVA
                     st.system_cache[sysname] = None
+                elif turn >= self._destabilize_turn[sysname]:
+                    st.system_status[sysname] = SystemStatus.DESTABILIZING
+
+        occupied = {st.ships[0].position, st.ships[1].position}
 
         # 2) Escalate existing (unoccupied) caches.
         for sysname in self.map.systems:
@@ -543,14 +591,20 @@ class Engine:
         # OVERCHARGE caches are terminal (no further upgrade).
         cache.next_upgrade_turn = self.state.turn_number + cfg.cache_upgrade_period
 
-    def _tick_supernova(self, sysname: System) -> None:
+    def _check_collapse_deaths(self, events: List[str]) -> bool:
+        """A ship standing on a system that has gone SUPERNOVA is destroyed.
+        Returns True (and ends the skirmish) if anyone died."""
         st = self.state
-        cfg = self.config
-        status = st.system_status[sysname]
-        if status is SystemStatus.STABLE:
-            if self.rng.random() < cfg.destabilize_prob:
-                st.system_status[sysname] = SystemStatus.DESTABILIZING
-        elif status is SystemStatus.DESTABILIZING:
-            if self.rng.random() < cfg.supernova_prob:
-                st.system_status[sysname] = SystemStatus.SUPERNOVA
-        # SUPERNOVA is terminal for the skirmish (systems don't recover here).
+        dead = [i for i in (0, 1)
+                if st.system_status[st.ships[i].position] is SystemStatus.SUPERNOVA]
+        if not dead:
+            return False
+        if len(dead) == 2:
+            st.done = True
+            st.winner = None
+            st.end_reason = "collapse"
+            events.append("both ships caught in the collapse — draw")
+        else:
+            loser = dead[0]
+            self._win(other(loser), "supernova", events)
+        return True
