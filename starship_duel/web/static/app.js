@@ -13,6 +13,21 @@ const ACT_ICON = {
 };
 const UNLOCK_BADGE = { proximity_alert: "PROX", long_range_scanners: "LRS", jamming: "JAM" };
 
+// ---- what each action does (shown on hover) --------------------------------
+const ACT_DESC = {
+  JUMP: "Move to an adjacent system. Entering a rival-claimed or rival-occupied system exposes your position.",
+  HOLD: "Stay put and slip back under cloak — the way to disappear again after being spotted.",
+  CLAIM: "Take the system you're standing on for income (binaries pay more) — but claiming exposes your position.",
+  FIRE: "Attack your current system. Instant win if the rival is here; otherwise a public miss (and it exposes you if they have Proximity Alert).",
+  SCAN: "Spend Energy to reveal the rival's exact system — unless they are deep-cloaked.",
+  DEEP_CLOAK: "Spend Energy to become undetectable for 2 turns — immune to every reveal, even sitting in enemy territory.",
+  OVERCHARGE: "Spend Energy to bank +1 extra action for next turn (stacks).",
+  UNLOCK_PROXIMITY_ALERT: "Permanent unlock: the rival is revealed whenever their Fire misses near you.",
+  UNLOCK_LONG_RANGE_SCANNERS: "Permanent unlock: reveal the rival when you jump into the system they're in.",
+  UNLOCK_JAMMING: "Permanent unlock: your Energy-spending actions show to the rival only as a generic “spent Energy”.",
+  END_TURN: "End your turn now. Any actions beyond the base 2 left unspent are banked for next turn.",
+};
+
 // ---- app state -------------------------------------------------------------
 const State = {
   game: null,      // latest view payload
@@ -253,6 +268,7 @@ function renderHud(v) {
 function renderActions(v) {
   const host = $("#actions");
   const pips = $("#actions-pips");
+  hideTip();  // avoid a stale tooltip lingering across re-renders
   host.replaceChildren();
   pips.replaceChildren();
   const hint = $("#action-hint");
@@ -277,19 +293,48 @@ function renderActions(v) {
   // Show the whole catalogue; dim what's currently unaffordable/unavailable.
   for (const a of v.action_menu) {
     const btn = document.createElement("button");
+    // NB: no `disabled` attribute on unavailable buttons -- disabled controls
+    // don't fire hover events, and we want their tooltip to work too. We just
+    // style them and withhold the click handler.
     btn.className = `act-btn act-${a.type}`
       + (a.type === "JUMP" && a.enabled ? " jump-highlight" : "")
       + (a.enabled ? "" : " disabled");
-    // Enabled -> show the cost on the right; disabled -> reason under the label.
     const cost = a.enabled && a.cost ? `<span class="cost">${a.cost}⚡</span>` : "";
     const reason = a.enabled ? "" : `<span class="reason">${a.reason || ""}</span>`;
     btn.innerHTML = `<svg class="ic" viewBox="0 0 64 64"><use href="#${ACT_ICON[a.type]}"/></svg>
                      <span class="body"><span class="label">${a.label}</span>${reason}</span>${cost}`;
-    if (a.enabled) btn.onclick = () => humanAction(a.type, a.dest);
-    else { btn.disabled = true; btn.title = a.reason || "unavailable"; }
+    if (a.enabled) btn.onclick = () => { hideTip(); humanAction(a.type, a.dest); };
+    btn.addEventListener("mouseenter", () => showTip(btn, a));
+    btn.addEventListener("mouseleave", hideTip);
     host.appendChild(btn);
   }
 }
+
+// ---- action tooltip --------------------------------------------------------
+let _tipEl = null;
+function _tip() {
+  if (!_tipEl) { _tipEl = document.createElement("div"); _tipEl.id = "act-tooltip"; document.body.appendChild(_tipEl); }
+  return _tipEl;
+}
+function showTip(btn, a) {
+  const tip = _tip();
+  const cost = a.cost ? `<div class="tip-cost">Cost: ${a.cost}⚡</div>` : "";
+  const warn = (!a.enabled && a.reason) ? `<div class="tip-warn">Unavailable — ${a.reason}</div>` : "";
+  tip.innerHTML = `<div class="tip-title">${a.label}</div>
+                   <div class="tip-desc">${ACT_DESC[a.type] || ""}</div>${cost}${warn}`;
+  tip.classList.add("show");
+  // Anchor the tooltip's right edge just left of the button (sidebar is on the
+  // right, so there's room), clamped into the viewport.
+  const r = btn.getBoundingClientRect();
+  tip.style.left = "0px"; tip.style.top = "0px"; // reset before measuring
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = r.left - tw - 12;
+  if (left < 8) left = Math.min(r.right + 12, window.innerWidth - tw - 8); // flip right if no room
+  let top = Math.max(8, Math.min(r.top, window.innerHeight - th - 8));
+  tip.style.left = left + "px";
+  tip.style.top = top + "px";
+}
+function hideTip() { if (_tipEl) _tipEl.classList.remove("show"); }
 
 // ---- log & banner ----------------------------------------------------------
 function renderLog(v) {

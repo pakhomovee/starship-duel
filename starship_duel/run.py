@@ -114,7 +114,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     p.add_argument("--map", dest="map_id", default=None, help="force a map id")
     p.add_argument("--render", action="store_true", help="print per-action log")
     p.add_argument("--quiet", action="store_true", help="summary only")
+    p.add_argument("--verbose", action="store_true", help="show bot INFO logs (e.g. DeepSeek calls)")
     args = p.parse_args(argv)
+
+    import logging
+    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
+                        format="%(levelname)s [%(name)s] %(message)s")
 
     bot0 = make_bot(args.bot0, seed=args.seed)
     bot1 = make_bot(args.bot1, seed=None if args.seed is None else args.seed + 1)

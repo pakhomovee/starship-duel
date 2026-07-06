@@ -49,10 +49,14 @@ Winning strategy:
 - Locate the rival: use SCANs at key moments, and infer position from the candidate-system estimate and the rival’s last actions. Narrow the set using public info (e.g., rival cannot be where you are unless a reveal occurred).
 - Close in safely: move through systems you control or are empty; avoid unnecessary exposure.
 - Fire only when you are certain the rival is in your exact system. A missed Fire may reveal your position (if rival has Proximity Alert) or simply waste an action. Firing while exposed is risky.
-- Re-cloak (HOLD) after becoming exposed unless you have a good reason to stay visible.
 - Spend Energy primarily on economy (CLAIM), occasional SCANs to update the rival’s location, and unlocks that fit your strategy. Deep Cloak or Overcharge should be used sparingly and only when you have surplus Energy and a plan.
 
-You will be given the game state and a numbered list of LEGAL actions. Reply with ONLY the single integer index of the action you choose. No other text."""
+CRITICAL — avoid these mistakes:
+- HOLD only re-cloaks you. If "you_are_cloaked" is already true, HOLD does NOTHING and wastes the whole turn — do NOT choose HOLD when you are already cloaked.
+- Do NOT idle or repeat the same passive move. Look at "your_recent_actions": if you have been holding or standing still, you are stuck losing — you MUST make progress instead: JUMP toward binary systems or the rival's estimated location, CLAIM the system you are on for income, or SCAN to find the rival. Standing still never wins; you have to move, claim territory, and hunt.
+- Every turn, prefer an action that changes the board (move, claim, scan, fire) over a passive one.
+
+You will be given the game state and a numbered list of LEGAL actions (each annotated with its effect). Respond with ONLY the integer index of your chosen action -- just the digits, nothing else. No words, no explanation, no punctuation. Example valid replies: "0" or "4"."""
 
 
 class DeepSeekBot(Bot):
@@ -65,8 +69,12 @@ class DeepSeekBot(Bot):
         self.model = model or os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
         self.base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
         self.timeout = timeout if timeout is not None else float(os.environ.get("DEEPSEEK_TIMEOUT", "20"))
+        # A little randomness avoids deterministic loops (temperature 0 + an
+        # unchanging state made the model pick HOLD forever).
+        self.temperature = float(os.environ.get("DEEPSEEK_TEMPERATURE", "0.6"))
         self._fallback = HeuristicBot(seed=seed)
         self.belief = BotBelief()  # we infer the rival's whereabouts ourselves
+        self.history: List[str] = []  # our own recent moves, fed back to the model
         self.last_error: Optional[str] = None
         self.last_pick: Optional[int] = None
         if self.api_key:
@@ -79,50 +87,58 @@ class DeepSeekBot(Bot):
     def reset(self) -> None:
         self._fallback.reset()
         self.belief.reset()
+        self.history = []
         self.last_error = None
+
+    def _remember(self, action: Action) -> None:
+        self.history.append(str(action))
+        self.history = self.history[-6:]
 
     # -- main entry point ----------------------------------------------------
     def act(self, obs: Observation) -> Action:
         legal = obs.legal_actions
-        logger.debug("starting observation")
         self.belief.observe(obs)
         if not legal:
             return Action.end_turn()
-        logger.debug("observed, quering")
+
         if not self.api_key:
-            self.last_error = "DEEPSEEK_API_KEY not set"
-            logger.debug("no API key -> heuristic fallback")
-            print("no API key -> heuristic fallback")
-            return self._fallback.act(obs)
+            # Logged loudly once in __init__; note the fallback here too so a
+            # glance at the logs makes the cause obvious.
+            logger.warning("no DEEPSEEK_API_KEY -> playing this move as the heuristic bot")
+            action = self._fallback.act(obs)
+            self._remember(action)
+            return action
+
         try:
-            idx = self._query(obs, legal)
-            print("API OK")
+            idx, raw = self._query(obs, legal)
             if idx is not None and 0 <= idx < len(legal):
                 self.last_pick = idx
                 self.last_error = None
-                logger.info("chose [%d] %s", idx, legal[idx])
-                return legal[idx]
-            self.last_error = f"model returned unusable index {idx!r}"
-            logger.warning("%s (legal has %d actions) -> heuristic fallback",
-                           self.last_error, len(legal))
-            print("error -> heuristic fallback")
+                action = legal[idx]
+                logger.info("DeepSeek chose [%d] %s", idx, action)
+                self._remember(action)
+                return action
+            self.last_error = f"unparseable/out-of-range reply {raw!r} (idx={idx}, {len(legal)} legal)"
+            logger.warning("%s -> heuristic fallback", self.last_error)
         except Exception as e:  # network/timeout/parse — degrade gracefully
             self.last_error = f"{type(e).__name__}: {e}"
-            logger.warning("API call failed: %s -> heuristic fallback", self.last_error)
-            print("API FAILED")
-        return self._fallback.act(obs)
+            logger.warning("DeepSeek call failed: %s -> heuristic fallback", self.last_error)
+        action = self._fallback.act(obs)
+        self._remember(action)
+        return action
 
     # -- API plumbing --------------------------------------------------------
-    def _query(self, obs: Observation, legal: List[Action]) -> Optional[int]:
-        user_prompt = _build_user_prompt(obs, legal, self.belief)
+    def _query(self, obs: Observation, legal: List[Action]):
+        """Returns ``(index, raw_content)``.  ``index`` is None if unparseable."""
+        user_prompt = _build_user_prompt(obs, legal, self.belief, self.history)
         body = json.dumps({
             "model": self.model,
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.2,
-            "max_tokens": 12,
+            "temperature": self.temperature,
+            "max_tokens": 24,
             "stream": False,
         }).encode("utf-8")
 
@@ -147,17 +163,42 @@ class DeepSeekBot(Bot):
             logger.error("HTTP %s from DeepSeek after %.1fs: %s", e.code, time.monotonic() - t0, detail)
             raise
         dt = time.monotonic() - t0
-        content = payload["choices"][0]["message"]["content"]
+        msg = payload["choices"][0]["message"]
+        content = msg.get("content") or ""
         logger.info("DeepSeek replied in %.1fs: %r", dt, content)
-        return _first_int(content)
+        return _pick_index(content, len(legal)), content
 
 
-def _first_int(text: str) -> Optional[int]:
-    m = re.search(r"-?\d+", text or "")
-    return int(m.group()) if m else None
+def _pick_index(text: str, n: int) -> Optional[int]:
+    """Extract a valid action index from the model's reply.
+
+    Prefers the LAST in-range integer (models often reason first, answer last);
+    falls back to the last integer of any value."""
+    ints = [int(m) for m in re.findall(r"-?\d+", text or "")]
+    if not ints:
+        return None
+    in_range = [v for v in ints if 0 <= v < n]
+    return in_range[-1] if in_range else ints[-1]
 
 
-def _build_user_prompt(obs: Observation, legal: List[Action], belief: "BotBelief") -> str:
+# Short effect hints appended to each legal action in the prompt.
+_ACTION_EFFECT = {
+    "JUMP": "move to {dest}",
+    "HOLD": "stay put and re-cloak (DOES NOTHING if you are already cloaked)",
+    "CLAIM": "claim this system for income; exposes you",
+    "FIRE": "attack this system; wins if the rival is here, else a public miss",
+    "SCAN": "reveal the rival's exact location (costs Energy)",
+    "DEEP_CLOAK": "become undetectable for 2 turns (costs Energy)",
+    "OVERCHARGE": "bank +1 action for next turn (costs Energy)",
+    "UNLOCK_PROXIMITY_ALERT": "permanent: rival revealed when their Fire misses",
+    "UNLOCK_LONG_RANGE_SCANNERS": "permanent: reveal rival when you jump into their system",
+    "UNLOCK_JAMMING": "permanent: hide your Energy-action types from the rival",
+    "END_TURN": "end the turn now (banks unspent actions beyond 2)",
+}
+
+
+def _build_user_prompt(obs: Observation, legal: List[Action], belief: "BotBelief",
+                       history: Optional[List[str]] = None) -> str:
     my_unlocks = [k for k, v in obs.unlocked.items() if v]
     rival_unlocks = [k for k, v in obs.rival_unlocked.items() if v]
     owned = [s for s, o in obs.system_owner.items() if o == obs.ship_id]
@@ -171,6 +212,7 @@ def _build_user_prompt(obs: Observation, legal: List[Action], belief: "BotBelief
         "actions_remaining": obs.actions_remaining,
         "banked_overcharge": obs.banked_overcharge,
         "your_unlocks": my_unlocks,
+        "your_recent_actions": list(history or []),
         "rival_unlocks": rival_unlocks,
         "rival_last_action": obs.rival_last_action,
         # Exact system only if known for certain; else our own inferred estimate.
@@ -191,8 +233,11 @@ def _build_user_prompt(obs: Observation, legal: List[Action], belief: "BotBelief
         "LEGAL ACTIONS (reply with one index):",
     ]
     for i, a in enumerate(legal):
-        desc = a.type.name + (f"({a.dest})" if a.dest else "")
-        lines.append(f"  {i}: {desc}")
+        effect = _ACTION_EFFECT.get(a.type.name, "")
+        if a.dest:
+            effect = effect.format(dest=a.dest)
+        label = a.type.name + (f"({a.dest})" if a.dest else "")
+        lines.append(f"  {i}: {label} — {effect}")
     lines.append("")
     lines.append("Your choice (index only):")
     return "\n".join(lines)

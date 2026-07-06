@@ -148,8 +148,22 @@ select, input {
 .act-btn.jump-highlight { border-color: var(--cyan); }
 /* Unaffordable / unavailable: shown but dimmed and non-interactive. */
 .act-btn.disabled { opacity: .34; cursor: not-allowed; filter: grayscale(0.4); }
-.act-btn.disabled:hover { background: var(--panel-2); }
+.act-btn.disabled:hover { background: var(--panel-2); opacity: .5; }
 .act-btn.disabled:active { transform: none; }
+
+/* Hover tooltip explaining what an action does (works on disabled ones too). */
+#act-tooltip {
+  position: fixed; z-index: 1000; max-width: 264px; pointer-events: none;
+  background: linear-gradient(180deg, #201850, #171040);
+  border: 1px solid #ffffff2e; border-radius: 12px; padding: 10px 12px;
+  box-shadow: 0 12px 34px #000b; opacity: 0; transform: translateY(3px);
+  transition: opacity .1s, transform .1s; font-family: 'Nunito';
+}
+#act-tooltip.show { opacity: 1; transform: translateY(0); }
+#act-tooltip .tip-title { font-family: 'Baloo 2'; font-weight: 800; font-size: 13px; color: var(--cyan); }
+#act-tooltip .tip-desc { font-weight: 700; font-size: 12px; line-height: 1.4; color: var(--violet-soft); margin-top: 3px; }
+#act-tooltip .tip-cost { font: 700 10px 'JetBrains Mono'; color: var(--cyan); margin-top: 6px; }
+#act-tooltip .tip-warn { font-weight: 800; font-size: 11px; color: var(--gold); margin-top: 6px; }
 .hint { color: var(--muted); font-size: 12px; margin: 10px 2px 0; }
 .pips { display: inline-flex; gap: 3px; }
 .pips .ic { width: 16px; height: 16px; }
