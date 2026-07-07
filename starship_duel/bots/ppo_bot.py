@@ -50,7 +50,67 @@ class PpoBot(Bot):
         )
 
     def act(self, obs: Observation) -> Action:
-        enc = self.encoder.encode(obs)
-        mask = self.codec.mask(obs)
+        try:
+            enc = self.encoder.encode(obs)
+            mask = self.codec.mask(obs)
+        except KeyError:
+            # This is a single-map checkpoint; the observation is from a different
+            # map (its systems aren't in our codec).  Degrade to a random legal
+            # move rather than crashing -- a single-map policy can't play off-map.
+            # (Use UniversalPpoBot for genuine multi-map play.)
+            return self.rng.choice(obs.legal_actions)
         a_idx, _, _ = self.model.act_numpy(enc, mask, deterministic=self.deterministic)
         return self.codec.decode(int(a_idx))
+
+
+class UniversalPpoBot(Bot):
+    """Map-universal GNN policy wrapped as a Bot -- plays *any* map.
+
+    Builds its graph adapters from each observation's own adjacency, so a single
+    checkpoint works on every map (including ones outside the training set).
+    """
+
+    name = "uppo"
+
+    def __init__(self, model, *, name: Optional[str] = None,
+                 deterministic: bool = True, seed: Optional[int] = None):
+        super().__init__(name=name, seed=seed)
+        self.model = model
+        self.deterministic = deterministic
+        self._cache: dict = {}
+
+    @classmethod
+    def from_checkpoint(cls, path: str, *, deterministic: bool = True,
+                        name: Optional[str] = None, seed: Optional[int] = None) -> "UniversalPpoBot":
+        import torch
+
+        from ..rl.universal.model import GraphActorCritic
+
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        if not ckpt.get("universal"):
+            raise ValueError(f"{path} is not a universal checkpoint; use PpoBot for single-map")
+        model = GraphActorCritic(
+            ckpt["node_dim"], ckpt["global_dim"],
+            hidden=ckpt["hidden"], gnn_layers=ckpt["gnn_layers"],
+        )
+        model.load_state_dict(ckpt["model_state"])
+        model.eval()
+        return cls(model, name=name or f"uppo:{path}", deterministic=deterministic, seed=seed)
+
+    def _adapters(self, obs: Observation):
+        from ..rl.universal.graph_action import UniversalActionCodec
+        from ..rl.universal.graph_encoder import GraphObsEncoder
+
+        systems = tuple(sorted(obs.adjacency.keys()))
+        if systems not in self._cache:
+            self._cache[systems] = (
+                UniversalActionCodec(list(systems)), GraphObsEncoder(list(systems))
+            )
+        return self._cache[systems]
+
+    def act(self, obs: Observation) -> Action:
+        codec, encoder = self._adapters(obs)
+        a_idx, _, _ = self.model.act_numpy(
+            encoder.encode(obs), codec.mask(obs), deterministic=self.deterministic
+        )
+        return codec.decode(int(a_idx))

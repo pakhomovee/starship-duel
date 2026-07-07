@@ -14,12 +14,18 @@ from typing import List, Optional
 @dataclass
 class PPOConfig:
     # -- environment --------------------------------------------------------
-    map_id: str = "reference"
+    # "map1" is the reference map; "map2"/"map3"/"map4" are the added maps. Each
+    # map trains its own specialist policy (RL spaces are bound per-map).
+    map_id: str = "map1"
     seed: int = 0
 
     # -- network ------------------------------------------------------------
     hidden: int = 256
     depth: int = 2
+    # -- map-universal (GNN) policy only; ignored by the legacy single-map path -
+    gnn_layers: int = 3                # message-passing rounds over the adjacency
+    # Maps sampled (uniformly) per episode when training the universal policy.
+    train_maps: List[str] = field(default_factory=lambda: ["map1", "map2", "map3", "map4"])
     # Warm-start the policy from an existing checkpoint (e.g. Phase 2 continuing
     # from Phase 1).  Must share architecture/map.  None = fresh init.
     init_from: Optional[str] = None
@@ -72,6 +78,7 @@ class PPOConfig:
     eval_every: int = 25
     eval_games: int = 100
     eval_opponents: List[str] = field(default_factory=lambda: ["random", "heuristic"])
-    log_dir: str = "runs/ppo"
+    # Namespaced by map so per-map runs never collide (e.g. runs/map2-ppo-league).
+    log_dir: str = "runs/map1-ppo"
     save_every: int = 100
     device: str = "cpu"                # sim is CPU-bound; "cuda" rarely helps here

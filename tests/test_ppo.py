@@ -142,7 +142,8 @@ def test_training_smoke_and_bot_reload(tmp_path):
     assert ckpt.exists()
 
     bot = PpoBot.from_checkpoint(str(ckpt))
-    res = play_skirmish(bot, RandomBot(seed=0), seed=0)
+    # Single-map checkpoint: pin its training map (it degrades to random off-map).
+    res = play_skirmish(bot, RandomBot(seed=0), seed=0, map_id="map1")
     assert res["winner"] in (0, 1, None)
 
 

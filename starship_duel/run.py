@@ -127,6 +127,9 @@ def build_bot(spec: str, seed: Optional[int] = None) -> Bot:
     if spec.startswith("ppo:"):
         from .bots.ppo_bot import PpoBot
         return PpoBot.from_checkpoint(spec[len("ppo:"):], seed=seed)
+    if spec.startswith("uppo:"):
+        from .bots.ppo_bot import UniversalPpoBot
+        return UniversalPpoBot.from_checkpoint(spec[len("uppo:"):], seed=seed)
     return make_bot(spec, seed=seed)
 
 

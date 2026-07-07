@@ -25,8 +25,8 @@ BotFactory = Callable[..., Bot]
 #: package never pulls in torch/numpy unless a PPO bot is actually built.
 _PPO_DIR = Path(__file__).resolve().parent / "ppo"
 _PPO_TIERS = {
-    "ppo-easy": "ckpt_200.pt",
-    "ppo-medium": "ckpt_500.pt",
+    "ppo-easy": "ckpt_500.pt",
+    "ppo-medium": "ckpt_2000.pt",
 }
 
 

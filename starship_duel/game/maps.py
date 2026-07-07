@@ -126,11 +126,87 @@ REFERENCE_MAP = GameMap(
 REFERENCE_MAP.validate()
 
 
+# --------------------------------------------------------------------------- #
+# Additional maps (each trains its own specialist policy -- the RL spaces are  #
+# bound per-map, so a checkpoint is not transferable across maps).             #
+# --------------------------------------------------------------------------- #
+_MAP2_ADJ = {  # 12 systems, 2 binaries
+    "Halvennor Binary": ["Corvessa", "Ashveil", "Solmere", "Zoryne Binary"],
+    "Corvessa":         ["Halvennor Binary", "Ashveil", "Drenmark"],
+    "Ashveil":          ["Halvennor Binary", "Corvessa", "Solmere", "Thravencourt"],
+    "Solmere":          ["Halvennor Binary", "Ashveil", "Thravencourt"],
+    "Thravencourt":     ["Solmere", "Ashveil", "Drenmark", "Veskar"],
+    "Drenmark":         ["Corvessa", "Thravencourt", "Ostrun", "Vesparil"],
+    "Ostrun":           ["Drenmark", "Kelvane", "Zoryne Binary", "Vesparil", "Pallidor"],
+    "Kelvane":          ["Ostrun", "Zoryne Binary"],
+    "Zoryne Binary":    ["Halvennor Binary", "Ostrun", "Kelvane"],
+    "Vesparil":         ["Drenmark", "Ostrun", "Pallidor", "Veskar"],
+    "Pallidor":         ["Ostrun", "Vesparil", "Veskar"],
+    "Veskar":           ["Thravencourt", "Vesparil", "Pallidor"],
+}
+MAP2 = GameMap(
+    id="map2",
+    adjacency={k: tuple(v) for k, v in _MAP2_ADJ.items()},
+    binary_systems=frozenset({"Halvennor Binary", "Zoryne Binary"}),
+)
+MAP2.validate()
+
+_MAP3_ADJ = {  # 11 systems, 3 binaries
+    "Thessyn":         ["Meridian Binary", "Ashkarn Binary"],
+    "Calderyx":        ["Meridian Binary", "Voxhollow", "Lyranth"],
+    "Meridian Binary": ["Thessyn", "Calderyx", "Voxhollow", "Ashkarn Binary"],
+    "Ashkarn Binary":  ["Thessyn", "Meridian Binary", "Ostravel Binary", "Kharnos"],
+    "Voxhollow":       ["Calderyx", "Meridian Binary", "Lyranth", "Corvath"],
+    "Lyranth":         ["Calderyx", "Voxhollow", "Corvath", "Ember Vale"],
+    "Corvath":         ["Voxhollow", "Lyranth", "Ember Vale", "Sildrun"],
+    "Ember Vale":      ["Lyranth", "Corvath", "Sildrun"],
+    "Sildrun":         ["Corvath", "Ember Vale", "Ostravel Binary"],
+    "Ostravel Binary": ["Ashkarn Binary", "Kharnos", "Sildrun"],
+    "Kharnos":         ["Ashkarn Binary", "Ostravel Binary"],
+}
+MAP3 = GameMap(
+    id="map3",
+    adjacency={k: tuple(v) for k, v in _MAP3_ADJ.items()},
+    binary_systems=frozenset({"Meridian Binary", "Ashkarn Binary", "Ostravel Binary"}),
+)
+MAP3.validate()
+
+_MAP4_ADJ = {  # 16 systems, 2 binaries
+    "Boreth":          ["Nytheris Binary", "Drakspire", "Vaelor", "Kelvax"],
+    "Kelvax":          ["Boreth", "Vaelor", "Ostrune"],
+    "Ashmere":         ["Nytheris Binary", "Calvenna", "Rivenna"],
+    "Nytheris Binary": ["Boreth", "Ashmere", "Calvenna", "Drakspire"],
+    "Drakspire":       ["Boreth", "Nytheris Binary", "Vaelor", "Sundrel"],
+    "Vaelor":          ["Boreth", "Kelvax", "Drakspire", "Ostrune", "Sundrel", "Kharvos"],
+    "Ostrune":         ["Kelvax", "Vaelor", "Threndal Binary"],
+    "Calvenna":        ["Ashmere", "Nytheris Binary", "Rivenna", "Halcrest"],
+    "Rivenna":         ["Ashmere", "Calvenna", "Halcrest"],
+    "Halcrest":        ["Calvenna", "Rivenna", "Zephyrn", "Ilmara"],
+    "Sundrel":         ["Drakspire", "Vaelor", "Kharvos", "Threndal Binary"],
+    "Kharvos":         ["Vaelor", "Sundrel"],
+    "Ilmara":          ["Halcrest", "Zephyrn", "Cassivar"],
+    "Zephyrn":         ["Halcrest", "Ilmara", "Cassivar"],
+    "Cassivar":        ["Zephyrn", "Ilmara", "Threndal Binary"],
+    "Threndal Binary": ["Cassivar", "Sundrel", "Ostrune"],
+}
+MAP4 = GameMap(
+    id="map4",
+    adjacency={k: tuple(v) for k, v in _MAP4_ADJ.items()},
+    binary_systems=frozenset({"Nytheris Binary", "Threndal Binary"}),
+)
+MAP4.validate()
+
+
 # Registry the environment samples from per skirmish.  Add new maps here.
-MAPS: List[GameMap] = [REFERENCE_MAP]
+MAPS: List[GameMap] = [REFERENCE_MAP, MAP2, MAP3, MAP4]
+
+# Human-friendly aliases -> canonical map id (keeps existing "reference" callers
+# working while letting training address the same map as "map1").
+_MAP_ALIASES = {"map1": "reference"}
 
 
 def get_map(map_id: str) -> GameMap:
+    map_id = _MAP_ALIASES.get(map_id, map_id)
     for m in MAPS:
         if m.id == map_id:
             return m
