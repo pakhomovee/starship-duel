@@ -124,15 +124,18 @@ def build_bot(spec: str, seed: Optional[int] = None) -> Bot:
     if spec.startswith("cmd:"):
         from .arena import SubprocessBot
         return SubprocessBot(spec[len("cmd:"):], name=spec, seed=seed)
+    if spec.startswith("ppo:"):
+        from .bots.ppo_bot import PpoBot
+        return PpoBot.from_checkpoint(spec[len("ppo:"):], seed=seed)
     return make_bot(spec, seed=seed)
 
 
 def main(argv: Optional[List[str]] = None) -> None:
     p = argparse.ArgumentParser(description="Run Starship Duel skirmishes.")
     p.add_argument("--bot0", default="heuristic",
-                   help="bot name, or 'cmd:<command>' to run an external bot")
+                   help="bot name, 'cmd:<command>' (external bot), or 'ppo:<checkpoint>'")
     p.add_argument("--bot1", default="random",
-                   help="bot name, or 'cmd:<command>' to run an external bot")
+                   help="bot name, 'cmd:<command>' (external bot), or 'ppo:<checkpoint>'")
     p.add_argument("--games", type=int, default=1, help="number of skirmishes")
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--map", dest="map_id", default=None, help="force a map id")

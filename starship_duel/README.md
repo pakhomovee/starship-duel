@@ -26,6 +26,9 @@ starship_duel/
     action_coding.py  # flat Discrete action space <-> Action + legal mask
     encoders.py       # Observation -> fixed-size float32 vector
     pettingzoo_env.py # AECEnv for masked self-play (passes pettingzoo api_test)
+    single_agent_view.py # learner-seat wrapper (opponent-as-environment)
+    model.py          # masked actor-critic (MLP torso + policy/value heads)
+    ppo/              # from-scratch PPO trainer: GAE, league self-play, eval
   arena/            # ── isolated subprocess bots (competition ladder) ──
     protocol.py       # JSON-line wire format (encode request / parse reply)
     subprocess_bot.py # spawns + referees an external program as a Bot
@@ -122,6 +125,40 @@ positions/maps). Swap in your own policy; mask the logits with `action_mask`.
 
 `ActionCodec` / `ObservationEncoder` (in `rl/`) are usable standalone if you
 prefer a different training harness (e.g. a custom PPO or the raw `env.py`).
+
+### PPO training (`rl/ppo/`)
+
+A from-scratch, masked PPO with self-play lives in `rl/ppo/`. It trains one seat
+via a single-agent view (`rl/single_agent_view.py`) that folds the opponent
+(scripted anchor or frozen policy snapshot) into the environment, so the update
+loop is standard clipped-surrogate PPO with GAE over whole episodes.
+
+```bash
+# Phase 1 — validate against a fixed scripted anchor
+python -m starship_duel.rl.ppo.train --opponent heuristic --total-updates 300 \
+    --num-workers 32 --episodes-per-update 512
+
+# Phase 2 — self-play league (snapshot pool + scripted anchors)
+python -m starship_duel.rl.ppo.train --self-play --total-updates 3000 \
+    --num-workers 32 --episodes-per-update 512 --log-dir runs/ppo_league
+```
+
+Rollouts fan out across `--num-workers` processes (`rl/ppo/parallel.py`): the sim
+is GIL-bound, so this is where nearly all the wall-clock speedup comes from. Set
+it to roughly the core count; `0/1` runs in-process (best for tests/debug). On
+Linux workers start with `fork`, so they share the parent's loaded torch pages
+copy-on-write — ~32 workers add only a few GB of RAM and start instantly.
+
+Progress is tracked by **win-rate vs fixed bots** (`eval/*`) — self-play reward
+is ~0 by construction. Metrics go to the console, `runs/.../metrics.jsonl`, and
+TensorBoard (grouped `charts/ losses/ eval/`); logs are tiny (~1 KB/update):
+
+```bash
+tensorboard --logdir runs/          # then open http://localhost:6006
+```
+
+A checkpoint plugs back into every existing tool as a bot (~0.5 MB each):
+`--bot0 "ppo:runs/ppo/ckpt_final.pt"`.
 
 ## Arena — external bots in any language
 
