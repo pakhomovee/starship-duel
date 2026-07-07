@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css?v=5">
+<link rel="stylesheet" href="/static/styles.css?v=7">
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -29,8 +29,73 @@
       <input id="inp-seed" type="number" placeholder="random" style="width:90px">
     </label>
     <button id="btn-new" class="btn btn-primary">New Game</button>
+    <button id="btn-rules" class="btn btn-ghost" title="How to play">Rules ?</button>
   </div>
 </header>
+
+<!-- Rules overview modal (opened via the Rules button) -->
+<div id="rules-overlay" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+    <button id="btn-rules-close" class="modal-close" aria-label="Close">✕</button>
+    <h2 id="rules-title">How to play Starship Duel</h2>
+    <p class="modal-lead">Two ships duel across a network of star systems — hunt your rival
+      down while staying hidden yourself. 1v1, alternating turns, zero-sum, hidden information:
+      your exact location is invisible to your rival unless something reveals it.</p>
+
+    <h3>Goal</h3>
+    <p>Win the skirmish by firing on the system your rival is actually in. Get caught on a
+      collapsing (supernova) system and you're destroyed; crash your bot and you forfeit.</p>
+
+    <h3>A turn</h3>
+    <ul>
+      <li>You get <b>2 actions</b> per turn (plus any you banked via Overcharge).</li>
+      <li>At turn start you earn <b>Energy</b> from systems you own: <b>+1</b> per single-star,
+        <b>+4</b> per binary system.</li>
+      <li>Leftover actions beyond the base 2 carry over to next turn; the base 2 do not.</li>
+    </ul>
+
+    <h3>Staying hidden</h3>
+    <p>You start <b>cloaked</b>. Certain actions <b>expose</b> you (reveal your exact system to
+      the rival): <b>Claim</b>, collecting a cache, and entering a rival-claimed system. <b>Hold</b>
+      to slip back under cloak. Your rival only ever sees a “could be here” set inferred from your
+      last known position and how many moves you've had since.</p>
+
+    <h3>Actions</h3>
+    <table class="rules-table">
+      <tr><th>Action</th><th>Cost</th><th>Effect</th></tr>
+      <tr><td>Jump</td><td>—</td><td>Move to an adjacent system. Entering a rival-claimed/occupied system exposes you.</td></tr>
+      <tr><td>Hold</td><td>—</td><td>Stay put and regain cloak.</td></tr>
+      <tr><td>Claim</td><td>—</td><td>Take the system you're on for income — exposes you.</td></tr>
+      <tr><td>Fire</td><td>—</td><td>Instant win if the rival is here; otherwise a public miss.</td></tr>
+      <tr><td>Scan</td><td>10⚡</td><td>Reveal the rival's exact system — unless they're deep-cloaked.</td></tr>
+      <tr><td>Deep Cloak</td><td>25⚡</td><td>Undetectable for 2 turns — immune to every reveal, even in enemy territory.</td></tr>
+      <tr><td>Overcharge</td><td>40⚡</td><td>Bank +1 extra action for next turn (stacks).</td></tr>
+      <tr><td>Unlock: Proximity Alert</td><td>10⚡</td><td>Permanent: a rival's missed Fire near you reveals them.</td></tr>
+      <tr><td>Unlock: Long-Range Scanners</td><td>40⚡</td><td>Permanent: jumping into the rival's system reveals them.</td></tr>
+      <tr><td>Unlock: Jamming</td><td>25⚡</td><td>Permanent: your Energy actions show to the rival only as “spent Energy”.</td></tr>
+    </table>
+
+    <h3>Caches</h3>
+    <p>Energy caches appear on systems and grow in value over time. You collect one only by
+      <b>starting</b> your turn on it — which grants its Energy (or a banked Overcharge action) but
+      <b>exposes</b> you. Binaries pay more but are the busiest, most contested systems.</p>
+
+    <h3>The collapse</h3>
+    <p>To keep games decisive, the field shrinks: from ~turn 24, systems collapse from the outside
+      in toward a random surviving “eye”, roughly every few turns. A system first
+      <b>DESTABILIZES</b> — shown with a <span class="warn-inline">⚠ countdown</span> giving you a few
+      turns to evacuate — then goes <b>supernova</b>. Anyone still on it is destroyed, so both ships
+      are forced together and every game resolves.</p>
+
+    <h3>Reading the board</h3>
+    <ul>
+      <li>Orange = Player 1, blue = Player 2. A ship at half-opacity is cloaked.</li>
+      <li>Glowing rings mark systems you can jump to — click them to move.</li>
+      <li>Faint halos mark your rival's possible “could be here” systems.</li>
+      <li><b>Step</b> advances one bot action; <b>Auto</b> runs continuously; <b>Stop</b> pauses.</li>
+    </ul>
+  </div>
+</div>
 
 <main class="layout">
   <section class="board-wrap">
@@ -70,6 +135,6 @@
   </aside>
 </main>
 
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=7"></script>
 </body>
 </html>

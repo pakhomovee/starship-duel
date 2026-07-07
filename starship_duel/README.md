@@ -80,7 +80,9 @@ uvicorn starship_duel.web.server:app --reload     # -> http://localhost:8000
 # or: python -m starship_duel.web.server
 ```
 
-Pick controllers for P1/P2 (any registered bot, or `human`) and hit **New Game**.
+Pick controllers for P1/P2 — a built-in bot, `human`, or an **arena bot** (an
+external program, listed under "Arena (external)") — and hit **New Game**, so you
+can play against your own C++/Python/etc. submission right from the UI.
 - **Human-vs-bot / hotseat:** the board shows *your* partial-information view —
   the rival appears as candidate-system halos (both starting positions are
   revealed, then re-hidden as ships move under cloak); click a glowing system
@@ -92,16 +94,64 @@ Pick controllers for P1/P2 (any registered bot, or `human`) and hit **New Game**
   human-vs-bot), and **Auto** streams over a WebSocket at an adjustable speed,
   pausing when it's your turn.
 
-Bots include a **`deepseek`** controller that picks each move via the DeepSeek
+**Play against a trained policy.** The two bundled PPO checkpoints show up as
+difficulty tiers — **`ppo-easy`** (`bots/ppo/ckpt_200.pt`) and **`ppo-medium`**
+(`bots/ppo/ckpt_500.pt`) — selectable like any other bot (loaded lazily, so torch
+is only imported if you actually pick one). Drop more `*.pt` files in and register
+tiers in `bots/__init__.py`.
+
+There's also a **`deepseek`** controller that picks each move via the DeepSeek
 chat API — set `DEEPSEEK_API_KEY` in the environment (optionally `DEEPSEEK_MODEL`
 default `deepseek-chat`, `DEEPSEEK_TIMEOUT` default 20s). Without a key it
 transparently falls back to the heuristic bot, so matches always run — and it
 **logs** each decision (`starship_duel.bots.deepseek`): a loud warning if the key
 is missing, otherwise the request, latency, reply, and chosen action, visible in
-the server console.
+the server console. Because it spends real API credits, it is **hidden from the
+web UI unless you set `STARSHIP_ENABLE_DEEPSEEK=1`** (it's always on the CLI).
+
+New to the game? Hit the **Rules** button in the top bar for an in-app overview
+of the goal, actions, economy, hiding/exposure, and the collapse.
+
+**Arena bots in the UI.** The bundled `example-py` bot is available out of the
+box; add your own by dropping an `arena_bots.json` next to where you launch the
+server (or point `$STARSHIP_ARENA_BOTS` at one):
+
+```json
+{ "my-cpp-bot": { "command": "./mybot", "timeout": 1.0 },
+  "py-hunter":  "python bots/hunter.py" }
+```
+
+They appear in the dropdown on next load. The bundled **C++ example** auto-appears
+as `example-cpp` once you build it (`cd arena/sdk/cpp && g++ -std=c++17 -O2 -I.
+example_bot.cpp -o example_bot`, needs nlohmann/json). **Security:** the web client
+only ever selects an arena bot by *name* — the command comes from this server-side
+allowlist, never from the request — so the UI can't run arbitrary commands. (A
+crashing arena bot forfeits, as in the CLI.)
 
 API surface: `POST /api/game`, `GET /api/game/{id}`, `POST …/action`,
 `POST …/step`, `POST …/reset`, and `WS /ws/watch/{id}` (`step`/`play`/`pause`).
+
+### Hosting on a VM (open-access testing)
+
+The server binds to **`127.0.0.1` by default**. To reach it from elsewhere, bind
+a public interface and (strongly recommended) require a shared token:
+
+```bash
+STARSHIP_ACCESS_TOKEN=$(openssl rand -hex 16) \
+  python -m starship_duel.web.server --host 0.0.0.0 --port 8000
+# share the URL as  http://<vm-host>:8000/?token=<that token>
+```
+
+With `STARSHIP_ACCESS_TOKEN` set, every `/api` and `/ws` call must carry the token
+(`?token=` or `X-Access-Token`); the static page still loads so the UI can attach
+it. `--host`/`--port` also read `STARSHIP_HOST`/`STARSHIP_PORT`.
+
+This is fine for a **short-lived test with people you trust**, not a public
+service. Known limitations: it keeps **one global game** (a new game tears down the
+previous one, so concurrent visitors interrupt each other), there's no rate
+limiting, and arena/PPO bots consume CPU per game. Put it behind a firewall or
+reverse proxy, keep the token secret, and don't set `DEEPSEEK_API_KEY` /
+`STARSHIP_ENABLE_DEEPSEEK` on a shared host unless you mean to pay for it.
 
 ## RL / self-play (PettingZoo)
 

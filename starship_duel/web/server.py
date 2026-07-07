@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -39,6 +40,35 @@ app = FastAPI(title="Starship Duel")
 
 _STATIC = Path(__file__).parent / "static"
 SESSIONS: Dict[str, GameSession] = {}
+
+# --------------------------------------------------------------------------- #
+# light hardening for VM/open-access test hosting (opt-in via env)            #
+# --------------------------------------------------------------------------- #
+# If set, every /api and /ws request must present this token (query ?token= or
+# X-Access-Token header).  Share the UI as http://host:port/?token=<token>.
+ACCESS_TOKEN = os.environ.get("STARSHIP_ACCESS_TOKEN") or None
+# The DeepSeek bot spends real API credits, so it's hidden from the web surface
+# unless explicitly enabled (it stays available on the CLI regardless).
+DEEPSEEK_ENABLED = bool(os.environ.get("STARSHIP_ENABLE_DEEPSEEK"))
+
+# Server-side allowlist of external "arena" bots (bundled example + any from
+# arena_bots.json). The client picks these by name; it never sends a command.
+from .arena_registry import PREFIX as ARENA_PREFIX
+from .arena_registry import ArenaBots
+ARENA = ArenaBots()
+
+
+@app.middleware("http")
+async def _require_token(request: Request, call_next):
+    """Gate the API behind a shared token when STARSHIP_ACCESS_TOKEN is set.
+
+    Only /api is protected; the static UI shell loads freely so a visitor can
+    open the page, but every game action needs the token."""
+    if ACCESS_TOKEN and request.url.path.startswith("/api"):
+        tok = request.query_params.get("token") or request.headers.get("x-access-token")
+        if tok != ACCESS_TOKEN:
+            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 # --------------------------------------------------------------------------- #
@@ -89,7 +119,15 @@ def _view(s: GameSession, perspective: Optional[str] = None) -> dict:
 # --------------------------------------------------------------------------- #
 @app.get("/api/bots")
 def list_bots():
-    return {"bots": sorted(REGISTRY.keys())}
+    # Built-in bots plus external arena bots (prefixed so the client can tell
+    # them apart and label them). Reload the arena list so a freshly-edited
+    # arena_bots.json shows up without restarting the server.
+    ARENA.reload()
+    names = [b for b in sorted(REGISTRY.keys()) if b != "deepseek" or DEEPSEEK_ENABLED]
+    return {
+        "bots": names,
+        "arena": [ARENA_PREFIX + n for n in ARENA.names()],
+    }
 
 
 @app.get("/api/maps")
@@ -97,13 +135,29 @@ def list_maps():
     return {"maps": [m.id for m in MAPS]}
 
 
+def _valid_controller(c: str) -> bool:
+    if c == "deepseek":
+        return DEEPSEEK_ENABLED  # hidden from the web surface unless enabled
+    if c == "human" or c in REGISTRY:
+        return True
+    return c.startswith(ARENA_PREFIX) and c[len(ARENA_PREFIX):] in ARENA.specs
+
+
 @app.post("/api/game")
 def create_game(req: CreateGame):
     controllers = {0: req.ship0, 1: req.ship1}
     for c in controllers.values():
-        if c != "human" and c not in REGISTRY:
+        if not _valid_controller(c):
             raise HTTPException(400, f"unknown controller {c!r}")
-    s = GameSession(controllers, config=GameConfig(), seed=req.seed, map_id=req.map_id)
+    if req.map_id is not None and req.map_id not in {m.id for m in MAPS}:
+        raise HTTPException(400, f"unknown map {req.map_id!r}")
+    # Single-user localhost tool: tear down previous games (and their subprocess
+    # bots) so external processes don't accumulate.
+    for old in list(SESSIONS.values()):
+        old.close()
+    SESSIONS.clear()
+    s = GameSession(controllers, config=GameConfig(), seed=req.seed,
+                    map_id=req.map_id, arena=ARENA)
     SESSIONS[s.id] = s
     return _view(s)
 
@@ -145,6 +199,10 @@ def reset_game(game_id: str, perspective: Optional[str] = None):
 # --------------------------------------------------------------------------- #
 @app.websocket("/ws/watch/{game_id}")
 async def watch(ws: WebSocket, game_id: str):
+    # The http middleware doesn't see websockets, so enforce the token here too.
+    if ACCESS_TOKEN and ws.query_params.get("token") != ACCESS_TOKEN:
+        await ws.close(code=1008)  # policy violation
+        return
     await ws.accept()
     s = SESSIONS.get(game_id)
     if s is None:
@@ -220,8 +278,22 @@ def index():
 
 
 def main():
+    """Run the server. Defaults to localhost; pass --host 0.0.0.0 (or set
+    STARSHIP_HOST) to expose it on a VM — see the README security note first."""
+    import argparse
+
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+    ap = argparse.ArgumentParser(prog="starship-duel-web")
+    ap.add_argument("--host", default=os.environ.get("STARSHIP_HOST", "127.0.0.1"),
+                    help="interface to bind (default 127.0.0.1; use 0.0.0.0 to expose)")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("STARSHIP_PORT", "8000")))
+    args = ap.parse_args()
+
+    if args.host != "127.0.0.1":
+        gate = "token required" if ACCESS_TOKEN else "NO ACCESS TOKEN SET — open to the network"
+        _pkg_log.warning("binding %s:%s — %s", args.host, args.port, gate)
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

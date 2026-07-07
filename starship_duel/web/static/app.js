@@ -3,6 +3,14 @@
 const SVGNS = "http://www.w3.org/2000/svg";
 const $ = (sel) => document.querySelector(sel);
 
+// Optional shared access token (when the server sets STARSHIP_ACCESS_TOKEN):
+// read from the page URL (?token=…) and attach to every API/WS request.
+const TOKEN = new URLSearchParams(location.search).get("token");
+function api(path) {
+  if (!TOKEN) return path;
+  return path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN);
+}
+
 // ---- sprite id maps --------------------------------------------------------
 const ACT_ICON = {
   JUMP: "act-jump", HOLD: "act-hold", CLAIM: "act-claim", FIRE: "act-fire",
@@ -59,9 +67,19 @@ async function boot() {
   const svg = await (await fetch("/static/sprites.svg")).text();
   $("#sprite-host").innerHTML = svg;
 
-  // /api/bots already includes "human"; don't prepend it again.
-  const { bots } = await (await fetch("/api/bots")).json();
-  const opts = () => bots.map((b) => `<option value="${b}">${b}</option>`).join("");
+  // /api/bots returns built-in bots (incl. "human") + external "arena" bots.
+  const data = await (await fetch(api("/api/bots"))).json();
+  const opt = (v, label) => `<option value="${v}">${label}</option>`;
+  const opts = () => {
+    let html = `<optgroup label="Built-in">`
+      + (data.bots || []).map((b) => opt(b, b)).join("") + `</optgroup>`;
+    if ((data.arena || []).length) {
+      html += `<optgroup label="Arena (external)">`
+        + data.arena.map((a) => opt(a, a.replace("arena:", "") + " ⚙")).join("")
+        + `</optgroup>`;
+    }
+    return html;
+  };
   $("#sel-ship0").innerHTML = opts();
   $("#sel-ship1").innerHTML = opts();
   $("#sel-ship0").value = "human";
@@ -69,6 +87,7 @@ async function boot() {
 
   $("#btn-new").onclick = newGame;
   $("#btn-reset").onclick = resetGame;
+  wireRules();
   $("#btn-step").onclick = () => wsSend({ cmd: "step" });
   $("#btn-play").onclick = () => { wsSend({ cmd: "play", delay: speed() }); setPlaying(true); };
   $("#btn-pause").onclick = () => { wsSend({ cmd: "pause" }); setPlaying(false); };
@@ -77,6 +96,17 @@ async function boot() {
 }
 
 function speed() { return (1280 - Number($("#inp-speed").value)) / 1000; }
+
+// ---- rules modal -----------------------------------------------------------
+function wireRules() {
+  const overlay = $("#rules-overlay");
+  const open = () => { overlay.hidden = false; };
+  const close = () => { overlay.hidden = true; };
+  $("#btn-rules").onclick = open;
+  $("#btn-rules-close").onclick = close;
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+}
 
 // ---- game lifecycle --------------------------------------------------------
 async function newGame() {
@@ -107,7 +137,7 @@ async function humanAction(type, dest) {
 // ---- websocket (watch mode) ------------------------------------------------
 function openWs(id) {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/watch/${id}`);
+  const ws = new WebSocket(`${proto}://${location.host}${api(`/ws/watch/${id}`)}`);
   ws.onmessage = (e) => onView(JSON.parse(e.data));
   ws.onclose = () => { if (State.ws === ws) State.ws = null; setPlaying(false); };
   State.ws = ws;
@@ -140,7 +170,8 @@ function onView(view) {
 
 function renderChips(v) {
   const modeName = { human_vs_bot: "Human vs Bot", bot_vs_bot: "Bot vs Bot", human_vs_human: "Hotseat" }[v.mode];
-  $("#mode-chip").textContent = `${modeName} · ${v.controllers["0"]} / ${v.controllers["1"]}`;
+  const cname = (c) => c.replace("arena:", "");
+  $("#mode-chip").textContent = `${modeName} · ${cname(v.controllers["0"])} / ${cname(v.controllers["1"])}`;
   const turnChip = $("#turn-chip");
   if (v.done) { turnChip.textContent = "Skirmish over"; turnChip.style.background = "#3a2140"; turnChip.style.color = "#fff"; }
   else {
@@ -368,7 +399,7 @@ function renderBanner(v) {
 
 // ---- util ------------------------------------------------------------------
 async function postJSON(url, body) {
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const r = await fetch(api(url), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) { const t = await r.text(); alert("Error: " + t); throw new Error(t); }
   return r.json();
 }

@@ -28,22 +28,36 @@ class GameSession:
         config: Optional[GameConfig] = None,
         seed: Optional[int] = None,
         map_id: Optional[str] = None,
+        arena=None,
     ):
         self.id = f"g{next(_ids)}"
-        self.controllers = controllers  # {0: "human"|botname, 1: ...}
+        self.controllers = controllers  # {0: "human"|botname|"arena:<name>", 1: ...}
         self.config = config or GameConfig()
         self.seed = seed
         self.map_id = map_id
+        self.arena = arena  # web.arena_registry.ArenaBots (or None)
         self.lock = threading.Lock()
 
         self.env = StarshipDuelEnv(config=self.config, seed=seed)
         self.bots: Dict[int, Bot] = {
-            s: make_bot(name, seed=None if seed is None else seed + s)
+            s: self._build_controller(name, None if seed is None else seed + s)
             for s, name in controllers.items()
             if name != "human"
         }
         self.events: List[str] = []
         self.reset()
+
+    def _build_controller(self, name: str, seed):
+        from .arena_registry import PREFIX
+        if self.arena is not None and name.startswith(PREFIX):
+            return self.arena.make(name[len(PREFIX):])
+        return make_bot(name, seed=seed)
+
+    def close(self) -> None:
+        """Tear down any external subprocess bots this session owns."""
+        for b in self.bots.values():
+            if hasattr(b, "close"):
+                b.close()
 
     # -- derived -------------------------------------------------------------
     @property

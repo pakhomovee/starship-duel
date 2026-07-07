@@ -70,6 +70,32 @@ class TestWebApi(unittest.TestCase):
         SESSIONS.clear()
         self.client = TestClient(app)
 
+    def test_map_id_validated(self):
+        r = self.client.post("/api/game", json={"ship0": "human", "ship1": "random",
+                                                "map_id": "___no_such_map___"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_deepseek_gated_off_by_default(self):
+        # Hidden from the listing and rejected as a controller unless enabled.
+        self.assertNotIn("deepseek", self.client.get("/api/bots").json()["bots"])
+        r = self.client.post("/api/game", json={"ship0": "human", "ship1": "deepseek"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_access_token_gate(self):
+        from starship_duel.web import server
+        old = server.ACCESS_TOKEN
+        server.ACCESS_TOKEN = "s3cret"
+        try:
+            self.assertEqual(self.client.get("/api/bots").status_code, 401)
+            self.assertEqual(self.client.get("/api/bots?token=nope").status_code, 401)
+            self.assertEqual(self.client.get("/api/bots?token=s3cret").status_code, 200)
+            self.assertEqual(
+                self.client.get("/api/bots", headers={"X-Access-Token": "s3cret"}).status_code, 200)
+            # The static UI shell stays reachable so the page can load.
+            self.assertEqual(self.client.get("/").status_code, 200)
+        finally:
+            server.ACCESS_TOKEN = old
+
     def test_bot_vs_bot_step_flow(self):
         r = self.client.post("/api/game", json={"ship0": "heuristic", "ship1": "random", "seed": 1})
         self.assertEqual(r.status_code, 200)
@@ -104,6 +130,42 @@ class TestWebApi(unittest.TestCase):
         # An obviously illegal action (jump to a non-neighbour) is rejected.
         r3 = self.client.post(f"/api/game/{gid}/action", json={"type": "JUMP", "dest": "___nowhere___"})
         self.assertEqual(r3.status_code, 400)
+
+    @unittest.skipUnless(_HAVE_RL, "torch not installed")
+    def test_play_against_ppo_bot(self):
+        # The bundled PPO tiers are listed and playable from the UI.
+        bots = self.client.get("/api/bots").json()["bots"]
+        self.assertIn("ppo-easy", bots)
+        self.assertIn("ppo-medium", bots)
+        r = self.client.post("/api/game", json={"ship0": "human", "ship1": "ppo-medium", "seed": 1})
+        self.assertEqual(r.status_code, 200)
+        view = r.json()
+        gid = view["game_id"]
+        guard = 0
+        while not view["awaiting_human"] and not view["done"] and guard < 300:
+            view = self.client.post(f"/api/game/{gid}/step").json()
+            guard += 1
+        self.assertTrue(view["awaiting_human"] or view["done"])
+
+    def test_play_against_arena_bot(self):
+        # The bundled example arena bot is selectable and plays via subprocess.
+        bots = self.client.get("/api/bots").json()
+        self.assertIn("arena:example-py", bots["arena"])
+        # Unknown arena bot is rejected (allowlist).
+        bad = self.client.post("/api/game", json={"ship0": "human", "ship1": "arena:nope"})
+        self.assertEqual(bad.status_code, 400)
+        # Human vs the arena subprocess bot.
+        r = self.client.post("/api/game", json={"ship0": "human", "ship1": "arena:example-py", "seed": 1})
+        self.assertEqual(r.status_code, 200)
+        view = r.json()
+        self.assertEqual(view["mode"], "human_vs_bot")
+        gid = view["game_id"]
+        # Step the external bot until it's the human's turn or the game ends.
+        guard = 0
+        while not view["awaiting_human"] and not view["done"] and guard < 300:
+            view = self.client.post(f"/api/game/{gid}/step").json()
+            guard += 1
+        self.assertTrue(view["awaiting_human"] or view["done"])
 
 
 if __name__ == "__main__":

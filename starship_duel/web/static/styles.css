@@ -176,3 +176,43 @@ select, input {
 .log .ev.hot { color: var(--gold); }
 .log .ev.win { color: var(--cyan); font-weight: 700; }
 .log::-webkit-scrollbar { width: 8px; } .log::-webkit-scrollbar-thumb { background: #ffffff22; border-radius: 8px; }
+
+/* ---------- rules modal ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: #05030bcc; backdrop-filter: blur(4px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 48px 20px; overflow-y: auto;
+}
+.modal-overlay[hidden] { display: none; }
+.modal {
+  position: relative; width: min(760px, 100%);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid #ffffff26; border-radius: 18px;
+  box-shadow: 0 24px 80px #000a; padding: 28px 32px 32px;
+}
+.modal h2 { font-family: 'Baloo 2'; font-weight: 800; font-size: 24px; margin: 0 0 6px; }
+.modal h3 {
+  font-family: 'Baloo 2'; font-weight: 700; font-size: 15px; color: var(--cyan);
+  text-transform: uppercase; letter-spacing: 1.5px; margin: 22px 0 8px;
+}
+.modal p, .modal li { font-size: 14px; line-height: 1.6; color: var(--violet-soft); }
+.modal .modal-lead { color: var(--text); }
+.modal ul { margin: 6px 0; padding-left: 20px; }
+.modal li { margin: 3px 0; }
+.modal b { color: var(--text); }
+.warn-inline { color: var(--gold); font-weight: 700; }
+.rules-table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 13px; }
+.rules-table th, .rules-table td {
+  text-align: left; padding: 6px 10px; border-bottom: 1px solid #ffffff14; vertical-align: top;
+}
+.rules-table th { color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-size: 11px; }
+.rules-table td:first-child { color: var(--text); font-weight: 700; white-space: nowrap; }
+.rules-table td:nth-child(2) { color: var(--gold); font-weight: 700; white-space: nowrap; }
+.rules-table td { color: var(--violet-soft); }
+.modal-close {
+  position: absolute; top: 16px; right: 16px; width: 34px; height: 34px;
+  border-radius: 10px; border: 1px solid #ffffff22; background: var(--panel);
+  color: var(--text); font-size: 15px; cursor: pointer; line-height: 1;
+}
+.modal-close:hover { background: #241a5c; }

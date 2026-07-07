@@ -7,6 +7,7 @@ fresh :class:`Bot`.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable, Dict
 
 from .base import Bot
@@ -19,12 +20,34 @@ from .random_bot import RandomBot
 #: A factory takes an optional ``seed`` and returns a fresh :class:`Bot`.
 BotFactory = Callable[..., Bot]
 
+#: Bundled trained-PPO checkpoints, exposed as ready-to-play difficulty tiers.
+#: The checkpoints ship in ``bots/ppo/``; the factory is lazy so importing this
+#: package never pulls in torch/numpy unless a PPO bot is actually built.
+_PPO_DIR = Path(__file__).resolve().parent / "ppo"
+_PPO_TIERS = {
+    "ppo-easy": "ckpt_200.pt",
+    "ppo-medium": "ckpt_500.pt",
+}
+
+
+def _make_ppo(ckpt: str, display: str) -> BotFactory:
+    def factory(seed=None) -> Bot:
+        from .ppo_bot import PpoBot
+        return PpoBot.from_checkpoint(str(_PPO_DIR / ckpt), name=display, seed=seed)
+    return factory
+
+
 REGISTRY: Dict[str, BotFactory] = {
     "random": lambda seed=None: RandomBot(seed=seed),
     "heuristic": lambda seed=None: HeuristicBot(seed=seed),
     "deepseek": lambda seed=None: DeepSeekBot(seed=seed),
     "human": lambda seed=None: HumanBot(),
 }
+
+# Register bundled PPO tiers only if their checkpoint file is present.
+for _tier, _ckpt in _PPO_TIERS.items():
+    if (_PPO_DIR / _ckpt).exists():
+        REGISTRY[_tier] = _make_ppo(_ckpt, _tier)
 
 
 def register(name: str, factory: BotFactory) -> None:
