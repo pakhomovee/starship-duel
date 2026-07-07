@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import itertools
 import threading
+import time
+import uuid
 from typing import Dict, List, Optional
 
 from ..bots import Bot, make_bot
@@ -29,6 +31,7 @@ class GameSession:
         seed: Optional[int] = None,
         map_id: Optional[str] = None,
         arena=None,
+        store=None,
     ):
         self.id = f"g{next(_ids)}"
         self.controllers = controllers  # {0: "human"|botname|"arena:<name>", 1: ...}
@@ -36,7 +39,14 @@ class GameSession:
         self.seed = seed
         self.map_id = map_id
         self.arena = arena  # web.arena_registry.ArenaBots (or None)
+        self.store = store  # web.history.GameStore (or None) -> persist replays
         self.lock = threading.Lock()
+
+        # Replay recording: one record per skirmish (a new record_id per reset).
+        self.record_id: str = ""
+        self.frames: List[dict] = []
+        self.started: float = 0.0
+        self._saved: bool = False
 
         self.env = StarshipDuelEnv(config=self.config, seed=seed)
         self.bots: Dict[int, Bot] = {
@@ -82,8 +92,38 @@ class GameSession:
         self.events.append(
             f"skirmish start on {st.map_id}; ship_{st.turn_ship} moves first"
         )
+        # Start a fresh replay recording for this skirmish.
+        self.record_id = uuid.uuid4().hex[:12]
+        self.frames = []
+        self.started = time.time()
+        self._saved = False
+        self._record()
         # No auto-play: bot turns are advanced explicitly (Step / Auto) so the
         # UI can watch every bot action unfold, even in human-vs-bot.
+
+    # -- replay recording ----------------------------------------------------
+    def _record(self) -> None:
+        """Capture the current truth frame; persist the game once it ends."""
+        from .serialize import serialize  # local import avoids an import cycle
+
+        self.frames.append(serialize(self, "truth"))
+        if self.store is not None and not self._saved and self.env.done:
+            self._saved = True
+            st = self.env.engine.state
+            meta = {
+                "created": self.started,
+                "mode": self.mode,
+                "map_id": st.map_id,
+                "seed": self.seed,
+                "controllers": {str(k): v for k, v in self.controllers.items()},
+                "winner": st.winner,
+                "end_reason": st.end_reason,
+                "plies": len(self.frames),
+            }
+            try:
+                self.store.save(self.record_id, meta, self.frames)
+            except Exception:  # never let persistence break live play
+                pass
 
     # -- human input ---------------------------------------------------------
     def apply_human_action(self, action_type: str, dest: Optional[str]) -> List[str]:
@@ -101,6 +141,7 @@ class GameSession:
         self.env.step(action)
         evs = list(self.env.last_events)
         self.events.extend(evs)
+        self._record()
         return evs
 
     # -- bot stepping --------------------------------------------------------
@@ -120,6 +161,7 @@ class GameSession:
             # A crashing bot automatically loses.
             self.env.engine.forfeit(ship, reason="crash")
             self.events.append(f"ship{ship} crashed ({e}) — forfeits")
+            self._record()
             return list(self.events[-1:])
         return self._step(action)
 

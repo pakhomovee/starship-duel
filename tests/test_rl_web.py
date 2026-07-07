@@ -3,6 +3,8 @@
 These import numpy/gymnasium/pettingzoo/fastapi, so they are skipped cleanly if
 those optional deps are absent (the pure-stdlib core is covered elsewhere)."""
 
+import os
+import tempfile
 import unittest
 
 try:
@@ -19,6 +21,12 @@ try:
     _HAVE_WEB = True
 except Exception:
     _HAVE_WEB = False
+
+try:
+    import networkx  # noqa: F401
+    _HAVE_NX = True
+except Exception:
+    _HAVE_NX = False
 
 
 @unittest.skipUnless(_HAVE_RL, "RL deps not installed")
@@ -66,9 +74,23 @@ class TestRLAdapters(unittest.TestCase):
 @unittest.skipUnless(_HAVE_WEB, "fastapi not installed")
 class TestWebApi(unittest.TestCase):
     def setUp(self):
-        from starship_duel.web.server import app, SESSIONS
-        SESSIONS.clear()
-        self.client = TestClient(app)
+        from starship_duel.web import server
+        from starship_duel.web.history import GameStore
+        server.SESSIONS.clear()
+        # Isolate recorded games in a throwaway db so tests don't touch cwd.
+        self._db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self._db.close()
+        self._old_store = server.STORE
+        server.STORE = GameStore(self._db.name)
+        self.client = TestClient(server.app)
+
+    def tearDown(self):
+        from starship_duel.web import server
+        server.STORE = self._old_store
+        try:
+            os.unlink(self._db.name)
+        except OSError:
+            pass
 
     def test_map_id_validated(self):
         r = self.client.post("/api/game", json={"ship0": "human", "ship1": "random",
@@ -166,6 +188,51 @@ class TestWebApi(unittest.TestCase):
             view = self.client.post(f"/api/game/{gid}/step").json()
             guard += 1
         self.assertTrue(view["awaiting_human"] or view["done"])
+
+    def test_finished_game_is_recorded_and_replayable(self):
+        # No games recorded on a fresh store.
+        self.assertEqual(self.client.get("/api/games").json()["games"], [])
+        r = self.client.post("/api/game", json={"ship0": "heuristic", "ship1": "random", "seed": 4})
+        gid = r.json()["game_id"]
+        for _ in range(4000):
+            v = self.client.post(f"/api/game/{gid}/step").json()
+            if v["done"]:
+                break
+        self.assertTrue(v["done"])
+
+        games = self.client.get("/api/games").json()["games"]
+        self.assertEqual(len(games), 1)
+        g = games[0]
+        self.assertEqual(g["mode"], "bot_vs_bot")
+        self.assertIn(g["winner"], (0, 1, None))
+        self.assertGreater(g["plies"], 1)
+
+        replay = self.client.get(f"/api/games/{g['rid']}/replay").json()
+        self.assertEqual(len(replay["frames"]), g["plies"])
+        # Frames are truth views: renderable board + terminal last frame.
+        self.assertIn("systems", replay["frames"][0])
+        self.assertIn("edges", replay["frames"][0])
+        self.assertTrue(replay["frames"][-1]["done"])
+
+        # Deletion removes it; a missing replay is a 404.
+        self.assertEqual(self.client.delete(f"/api/games/{g['rid']}").status_code, 200)
+        self.assertEqual(self.client.get("/api/games").json()["games"], [])
+        self.assertEqual(self.client.get(f"/api/games/{g['rid']}/replay").status_code, 404)
+
+
+@unittest.skipUnless(_HAVE_WEB and _HAVE_NX, "web/networkx deps not installed")
+class TestPlanarLayout(unittest.TestCase):
+    def test_all_maps_draw_without_edge_crossings(self):
+        from starship_duel.game.maps import MAPS
+        from starship_duel.web.layout import compute_layout, count_crossings, _edge_list
+        for m in MAPS:
+            pos = compute_layout(m)
+            # every system is placed inside the nominal drawing box
+            self.assertEqual(set(pos), set(m.systems))
+            self.assertEqual(
+                count_crossings(pos, _edge_list(m)), 0,
+                f"map {m.id} drawn with edge crossings",
+            )
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ const State = {
   game: null,      // latest view payload
   ws: null,        // websocket for watch mode
   playing: false,
+  replay: null,    // { frames, idx, meta, playing, timer } while watching a replay
 };
 
 // ---- svg helpers -----------------------------------------------------------
@@ -88,6 +89,8 @@ async function boot() {
   $("#btn-new").onclick = newGame;
   $("#btn-reset").onclick = resetGame;
   wireRules();
+  wireGames();
+  wireReplay();
   $("#btn-step").onclick = () => wsSend({ cmd: "step" });
   $("#btn-play").onclick = () => { wsSend({ cmd: "play", delay: speed() }); setPlaying(true); };
   $("#btn-pause").onclick = () => { wsSend({ cmd: "pause" }); setPlaying(false); };
@@ -110,6 +113,7 @@ function wireRules() {
 
 // ---- game lifecycle --------------------------------------------------------
 async function newGame() {
+  exitReplay();
   closeWs();
   const body = {
     ship0: $("#sel-ship0").value,
@@ -151,6 +155,7 @@ function setPlaying(p) {
 
 // ---- top-level view update -------------------------------------------------
 function onView(view) {
+  if (State.replay) return;  // ignore live updates while a replay is on screen
   State.game = view;
   renderChips(view);
   renderBoard(view);
@@ -182,9 +187,29 @@ function renderChips(v) {
 }
 
 // ---- board -----------------------------------------------------------------
+// Global size multiplier for the current board: shrink sprites just enough
+// that no two systems' stars (or the ships orbiting them) can overlap, however
+// densely the planar layout packs them.
+let boardScale = 1;
+function computeBoardScale(systems) {
+  const REACH = 0.55;                      // a node's sprite+orbit reach, as a fraction of its size
+  const baseSize = (s) => (s.binary ? 112 : 92);
+  let s = 1;
+  for (let i = 0; i < systems.length; i++) {
+    for (let j = i + 1; j < systems.length; j++) {
+      const a = systems[i], b = systems[j];
+      const gap = Math.hypot(a.x - b.x, a.y - b.y);
+      const need = REACH * (baseSize(a) + baseSize(b));
+      if (need > 0) s = Math.min(s, 0.95 * gap / need);
+    }
+  }
+  return Math.max(0.5, Math.min(1, s));     // never upscale; keep a sane floor
+}
+
 function renderBoard(v) {
   const board = $("#board");
   board.replaceChildren();
+  boardScale = computeBoardScale(v.systems);
   const byName = Object.fromEntries(v.systems.map((s) => [s.name, s]));
 
   // edges
@@ -218,12 +243,12 @@ function renderBoard(v) {
     // cache
     if (s.cache) {
       const cx = s.x + ssz * 0.38, cy = s.y - ssz * 0.38;
-      g.appendChild(centered(s.cache.kind === "ENERGY" ? "cache-energy" : "cache-overcharge", cx, cy, 28));
-      if (s.cache.kind === "ENERGY") g.appendChild(text(cx, cy + 22, `+${s.cache.value}`, "sys-sub"));
+      g.appendChild(centered(s.cache.kind === "ENERGY" ? "cache-energy" : "cache-overcharge", cx, cy, 28 * boardScale));
+      if (s.cache.kind === "ENERGY") g.appendChild(text(cx, cy + 22 * boardScale, `+${s.cache.value}`, "sys-sub"));
     }
     // ownership flag
     if (s.owner !== null && s.owner !== undefined)
-      g.appendChild(centered(s.owner === 0 ? "flag-p1" : "flag-p2", s.x - ssz * 0.40, s.y - ssz * 0.36, 26));
+      g.appendChild(centered(s.owner === 0 ? "flag-p1" : "flag-p2", s.x - ssz * 0.40, s.y - ssz * 0.36, 26 * boardScale));
 
     // collapse early-warning: a countdown on a system about to go supernova
     if (s.status === "DESTABILIZING" && s.collapse_in != null) {
@@ -240,23 +265,24 @@ function renderBoard(v) {
     board.appendChild(g);
   }
 
-  // ships — fly in orbit around the star, not on top of it
+  // ships — fly in a tight orbit around the star, not on top of it
   for (const sh of v.ships) {
     if (!sh.position) continue;
     const node = byName[sh.position];
-    const orbit = sysSize(node) * 0.52;
+    const ssz = sysSize(node);
+    const orbit = ssz * 0.34;
     // opposite orbit slots so co-located ships never overlap
     const ang = sh.id === 0 ? -Math.PI * 0.62 : Math.PI * 0.38;
-    board.appendChild(renderShip(sh, node.x + orbit * Math.cos(ang), node.y + orbit * Math.sin(ang)));
+    board.appendChild(renderShip(sh, node.x + orbit * Math.cos(ang), node.y + orbit * Math.sin(ang), ssz * 0.40));
   }
 }
 
-function sysSize(s) { return s.binary ? 112 : 92; }
+function sysSize(s) { return (s.binary ? 112 : 92) * boardScale; }
 
-function renderShip(sh, x, y) {
+function renderShip(sh, x, y, size) {
   const g = el("g", { class: "ship-bob" });
   const warm = sh.id === 0;
-  const size = 46;
+  size = size || 46;
   g.appendChild(centered(warm ? "ship-warm-flame" : "ship-cool-flame", x, y + 5, size));
   const body = centered(warm ? "ship-warm" : "ship-cool", x, y, size);
   if (sh.cloaked) body.setAttribute("opacity", "0.5");
@@ -395,6 +421,168 @@ function renderBanner(v) {
     b.className = `banner win-${v.winner}`;
     b.textContent = `Player ${v.winner + 1} wins — ${v.end_reason.replace("_", " ")}`;
   }
+}
+
+// ---- games browser ---------------------------------------------------------
+function wireGames() {
+  const overlay = $("#games-overlay");
+  const close = () => { overlay.hidden = true; };
+  $("#btn-games").onclick = openGames;
+  $("#btn-games-close").onclick = close;
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+}
+
+const MODE_LABEL = { human_vs_bot: "Human vs Bot", bot_vs_bot: "Bot vs Bot", human_vs_human: "Hotseat" };
+function cname(c) { return String(c).replace("arena:", ""); }
+function fmtWhen(sec) {
+  if (!sec) return "—";
+  const d = new Date(sec * 1000);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+function outcomeText(g) {
+  if (g.winner === 0 || g.winner === 1) return `P${g.winner + 1} won`;
+  return "Draw";
+}
+
+async function openGames() {
+  const overlay = $("#games-overlay");
+  overlay.hidden = false;
+  const host = $("#games-list");
+  host.innerHTML = `<div class="games-empty">Loading…</div>`;
+  let games = [];
+  try {
+    games = (await (await fetch(api("/api/games"))).json()).games || [];
+  } catch (e) {
+    host.innerHTML = `<div class="games-empty">Could not load games.</div>`;
+    return;
+  }
+  if (!games.length) {
+    host.innerHTML = `<div class="games-empty">No games recorded yet — finish a skirmish and it'll show up here.</div>`;
+    return;
+  }
+  host.replaceChildren();
+  for (const g of games) {
+    const row = document.createElement("div");
+    row.className = "game-row";
+    const players = `${cname(g.controllers["0"])} vs ${cname(g.controllers["1"])}`;
+    const winCls = g.winner === 0 ? "win-0" : g.winner === 1 ? "win-1" : "draw";
+    row.innerHTML = `
+      <span class="game-when">${fmtWhen(g.created)}</span>
+      <div class="game-main">
+        <div class="game-players">${players}</div>
+        <div class="game-sub">${MODE_LABEL[g.mode] || g.mode} · ${g.map_id} · ${g.plies} plies · ${(g.end_reason || "").replace(/_/g, " ")}</div>
+      </div>
+      <span class="game-outcome ${winCls}">${outcomeText(g)}</span>
+      <div class="game-actions">
+        <button class="btn btn-primary act-watch">Watch ▶</button>
+        <button class="btn btn-danger act-del" title="Delete">🗑</button>
+      </div>`;
+    row.querySelector(".act-watch").onclick = () => startReplay(g.rid);
+    row.querySelector(".act-del").onclick = async () => {
+      await fetch(api(`/api/games/${g.rid}`), { method: "DELETE" });
+      openGames();
+    };
+    host.appendChild(row);
+  }
+}
+
+// ---- replay ----------------------------------------------------------------
+function wireReplay() {
+  $("#rp-prev").onclick = () => { replayPause(); replaySeek(State.replay.idx - 1); };
+  $("#rp-next").onclick = () => { replayPause(); replaySeek(State.replay.idx + 1); };
+  $("#rp-play").onclick = replayPlay;
+  $("#rp-pause").onclick = replayPause;
+  $("#rp-exit").onclick = () => {
+    exitReplay();
+    // Return to the live game you were in (reconnect its socket); if there is
+    // none, just start a fresh one.
+    if (State.game && State.game.game_id) { onView(State.game); openWs(State.game.game_id); }
+    else newGame();
+  };
+  $("#rp-slider").oninput = (e) => { replayPause(); replaySeek(Number(e.target.value)); };
+}
+function rpSpeed() { return (1280 - Number($("#rp-speed").value)) / 1000; }
+
+async function startReplay(rid) {
+  let data;
+  try {
+    data = await (await fetch(api(`/api/games/${rid}/replay`))).json();
+  } catch (e) { alert("Could not load replay."); return; }
+  if (!data.frames || !data.frames.length) { alert("Empty replay."); return; }
+
+  closeWs();                       // detach from any live game
+  $("#games-overlay").hidden = true;
+  State.replay = { frames: data.frames, idx: 0, meta: data.meta, playing: false, timer: null };
+
+  // Swap the header controls: hide live watch controls, show the replay bar.
+  // (.watch-controls sets display:flex, which beats the [hidden] attribute, so
+  // hide it with an inline style instead.)
+  $("#watch-controls").style.display = "none";
+  $("#btn-reset").style.display = "none";
+  $("#action-panel").style.display = "none";
+  const bar = $("#replay-bar");
+  bar.hidden = false;
+  const slider = $("#rp-slider");
+  slider.max = String(data.frames.length - 1);
+  slider.value = "0";
+  replaySeek(0);
+}
+
+function renderReplayFrame() {
+  const rp = State.replay;
+  const v = rp.frames[rp.idx];
+  renderChips(v);
+  renderBoard(v);
+  renderHud(v);
+  renderLog(v);
+  renderBanner(v);
+  $("#rp-counter").textContent = `${rp.idx + 1} / ${rp.frames.length}`;
+  $("#rp-slider").value = String(rp.idx);
+  $("#rp-prev").disabled = rp.idx <= 0;
+  $("#rp-next").disabled = rp.idx >= rp.frames.length - 1;
+}
+
+function replaySeek(idx) {
+  const rp = State.replay;
+  if (!rp) return;
+  rp.idx = Math.max(0, Math.min(idx, rp.frames.length - 1));
+  renderReplayFrame();
+}
+
+function replayPlay() {
+  const rp = State.replay;
+  if (!rp) return;
+  if (rp.idx >= rp.frames.length - 1) rp.idx = 0;  // restart from the top
+  rp.playing = true;
+  $("#rp-play").hidden = true; $("#rp-pause").hidden = false;
+  const tick = () => {
+    if (!State.replay || !State.replay.playing) return;
+    if (State.replay.idx >= State.replay.frames.length - 1) { replayPause(); return; }
+    replaySeek(State.replay.idx + 1);
+    State.replay.timer = setTimeout(tick, Math.max(rpSpeed(), 0.02) * 1000);
+  };
+  rp.timer = setTimeout(tick, Math.max(rpSpeed(), 0.02) * 1000);
+}
+
+function replayPause() {
+  const rp = State.replay;
+  if (!rp) return;
+  rp.playing = false;
+  if (rp.timer) { clearTimeout(rp.timer); rp.timer = null; }
+  $("#rp-play").hidden = false; $("#rp-pause").hidden = true;
+}
+
+function exitReplay() {
+  if (!State.replay) return;
+  replayPause();
+  State.replay = null;
+  $("#replay-bar").hidden = true;
+  $("#watch-controls").style.display = "";
+  $("#btn-reset").style.display = "";
+  $("#action-panel").style.display = "";
+  // Caller (New Game / exit button) decides what to render next.
 }
 
 // ---- util ------------------------------------------------------------------

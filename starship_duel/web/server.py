@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from ..bots import REGISTRY
 from ..game import GameConfig
 from ..game.maps import MAPS
+from .history import GameStore
 from .serialize import serialize
 from .session import GameSession
 
@@ -40,6 +41,10 @@ app = FastAPI(title="Starship Duel")
 
 _STATIC = Path(__file__).parent / "static"
 SESSIONS: Dict[str, GameSession] = {}
+
+# Persistent record of every finished skirmish (browse + replay). Path comes
+# from $STARSHIP_GAMES_DB, defaulting to ./starship_games.db.
+STORE = GameStore()
 
 # --------------------------------------------------------------------------- #
 # light hardening for VM/open-access test hosting (opt-in via env)            #
@@ -157,7 +162,7 @@ def create_game(req: CreateGame):
         old.close()
     SESSIONS.clear()
     s = GameSession(controllers, config=GameConfig(), seed=req.seed,
-                    map_id=req.map_id, arena=ARENA)
+                    map_id=req.map_id, arena=ARENA, store=STORE)
     SESSIONS[s.id] = s
     return _view(s)
 
@@ -192,6 +197,39 @@ def reset_game(game_id: str, perspective: Optional[str] = None):
     with s.lock:
         s.reset()
     return _view(s, perspective)
+
+
+# --------------------------------------------------------------------------- #
+# Game history + replays                                                       #
+# --------------------------------------------------------------------------- #
+@app.get("/api/games")
+def list_games(limit: int = 200):
+    """Summaries of past skirmishes, newest first."""
+    return {"games": STORE.list_games(limit=limit)}
+
+
+@app.get("/api/games/{rid}")
+def game_summary(rid: str):
+    meta = STORE.get_meta(rid)
+    if meta is None:
+        raise HTTPException(404, f"no recorded game {rid}")
+    return meta
+
+
+@app.get("/api/games/{rid}/replay")
+def game_replay(rid: str):
+    """Metadata plus the full list of per-ply truth frames for playback."""
+    replay = STORE.get_replay(rid)
+    if replay is None:
+        raise HTTPException(404, f"no recorded game {rid}")
+    return replay
+
+
+@app.delete("/api/games/{rid}")
+def delete_game(rid: str):
+    if not STORE.delete(rid):
+        raise HTTPException(404, f"no recorded game {rid}")
+    return {"deleted": rid}
 
 
 # --------------------------------------------------------------------------- #

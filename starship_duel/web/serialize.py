@@ -10,11 +10,11 @@ Two perspectives:
 
 from __future__ import annotations
 
-import math
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 from ..game import ActionType, build_observation
 from ..game.observation import Observation
+from .layout import compute_layout
 from .session import GameSession
 
 # Costs mirrored for UI labels (engine is source of truth for enforcement).
@@ -42,15 +42,6 @@ _LABELS = {
 }
 
 
-def _fallback_layout(systems: List[str]) -> Dict[str, tuple]:
-    n = len(systems)
-    cx, cy, r = 500.0, 360.0, 300.0
-    return {
-        s: (cx + r * math.cos(2 * math.pi * i / n), cy + r * math.sin(2 * math.pi * i / n))
-        for i, s in enumerate(systems)
-    }
-
-
 def _action_cost(session: GameSession, atype: ActionType) -> Optional[int]:
     attr = _COST_ATTR.get(atype)
     return getattr(session.config, attr) if attr else None
@@ -60,7 +51,7 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
     eng = session.env.engine
     st = eng.state
     gmap = eng.map
-    layout = gmap.layout or _fallback_layout(sorted(gmap.systems))
+    layout = compute_layout(gmap)
 
     systems = []
     for name in gmap.systems:

@@ -216,3 +216,36 @@ select, input {
   color: var(--text); font-size: 15px; cursor: pointer; line-height: 1;
 }
 .modal-close:hover { background: #241a5c; }
+
+/* ---------- games browser ---------- */
+.games-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.games-empty { color: var(--muted); font-size: 13px; padding: 12px 2px; }
+.game-row {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 12px; background: #ffffff08; border: 1px solid #ffffff14;
+}
+.game-row:hover { background: #ffffff12; }
+.game-when { font: 700 11px 'JetBrains Mono'; color: var(--muted); white-space: nowrap; }
+.game-main { min-width: 0; }
+.game-players { font-family: 'Baloo 2'; font-weight: 700; font-size: 14px; }
+.game-sub { font: 700 11px 'Nunito'; color: var(--muted); margin-top: 2px; }
+.game-outcome { font: 800 12px 'Baloo 2'; white-space: nowrap; }
+.game-outcome.win-0 { color: var(--p1); } .game-outcome.win-1 { color: var(--p2-bright); }
+.game-outcome.draw { color: var(--violet-soft); }
+.game-actions { display: flex; gap: 6px; }
+.game-actions .btn { padding: 6px 12px; font-size: 12px; }
+.btn-danger { border-color: #ff5c5c55; color: var(--danger); }
+.btn-danger:hover { background: #3a1420; }
+
+/* ---------- replay control bar ---------- */
+.replay-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+  padding: 8px 12px; border-radius: 14px;
+  background: linear-gradient(180deg, #211a52, #171040); border: 1px solid var(--cyan);
+}
+.replay-bar[hidden] { display: none; }
+.replay-bar .btn { padding: 6px 12px; font-size: 13px; }
+.replay-tag { font: 800 11px 'Baloo 2'; letter-spacing: 2px; color: var(--cyan); }
+.replay-slider { flex: 1 1 160px; min-width: 120px; accent-color: var(--cyan); }
+.replay-counter { font: 700 12px 'JetBrains Mono'; color: var(--violet-soft); white-space: nowrap; min-width: 64px; text-align: right; }
+.replay-bar .speed { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; font-weight: 700; }

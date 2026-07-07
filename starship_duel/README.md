@@ -112,6 +112,24 @@ web UI unless you set `STARSHIP_ENABLE_DEEPSEEK=1`** (it's always on the CLI).
 New to the game? Hit the **Rules** button in the top bar for an in-app overview
 of the goal, actions, economy, hiding/exposure, and the collapse.
 
+**Crossing-free, evenly-spaced maps.** The star systems form a *planar* graph,
+so the board is drawn as a straight-line planar embedding — no edges cross
+(`web/layout.py`: a Tutte barycentric embedding over the best outer face,
+falling back to networkx's `planar_layout`, then a circle if `networkx`/`numpy`
+are unavailable). A planarity-preserving force-directed **spread** then opens up
+dense clusters — every node move is vetoed if it would create a crossing — so
+the field stays planar while the systems breathe apart. The frontend sizes star
+sprites and ship orbits to the tightest gap in the layout, so nothing ever
+overlaps however densely a map packs. A hand-authored `GameMap.layout` is
+honored only when it too is crossing-free.
+
+**Game history & replays.** Every finished skirmish is recorded to a small
+SQLite store (`web/history.py`; path `$STARSHIP_GAMES_DB`, default
+`./starship_games.db`) as a zlib-compressed list of per-ply truth frames — a few
+KB each. Hit **Games** in the top bar to browse past matches and **Watch** any of
+them: a scrubber steps/plays/rewinds through the exact game as it happened
+(works for every mode, seed, human, or arena bot — no re-simulation).
+
 **Arena bots in the UI.** The bundled `example-py` bot is available out of the
 box; add your own by dropping an `arena_bots.json` next to where you launch the
 server (or point `$STARSHIP_ARENA_BOTS` at one):
@@ -130,6 +148,8 @@ crashing arena bot forfeits, as in the CLI.)
 
 API surface: `POST /api/game`, `GET /api/game/{id}`, `POST …/action`,
 `POST …/step`, `POST …/reset`, and `WS /ws/watch/{id}` (`step`/`play`/`pause`).
+Game history: `GET /api/games`, `GET /api/games/{rid}`,
+`GET /api/games/{rid}/replay`, `DELETE /api/games/{rid}`.
 
 ### Hosting on a VM (open-access testing)
 

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css?v=7">
+<link rel="stylesheet" href="/static/styles.css?v=9">
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -29,6 +29,7 @@
       <input id="inp-seed" type="number" placeholder="random" style="width:90px">
     </label>
     <button id="btn-new" class="btn btn-primary">New Game</button>
+    <button id="btn-games" class="btn btn-ghost" title="Browse & replay past games">Games ▤</button>
     <button id="btn-rules" class="btn btn-ghost" title="How to play">Rules ?</button>
   </div>
 </header>
@@ -97,6 +98,16 @@
   </div>
 </div>
 
+<!-- Past-games browser (opened via the Games button) -->
+<div id="games-overlay" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="games-title">
+    <button id="btn-games-close" class="modal-close" aria-label="Close">✕</button>
+    <h2 id="games-title">Past games</h2>
+    <p class="modal-lead">Every finished skirmish is recorded. Pick one to watch its replay.</p>
+    <div id="games-list" class="games-list"></div>
+  </div>
+</div>
+
 <main class="layout">
   <section class="board-wrap">
     <div class="board-head">
@@ -111,6 +122,19 @@
         </label>
       </div>
       <button id="btn-reset" class="btn btn-ghost">Reset</button>
+    </div>
+    <div class="replay-bar" id="replay-bar" hidden>
+      <span class="replay-tag">REPLAY</span>
+      <button id="rp-prev" class="btn" title="Previous action">◀</button>
+      <button id="rp-play" class="btn">Play ▶</button>
+      <button id="rp-pause" class="btn" hidden>Pause ⏸</button>
+      <button id="rp-next" class="btn" title="Next action">▶</button>
+      <input id="rp-slider" type="range" min="0" max="0" value="0" step="1" class="replay-slider">
+      <span id="rp-counter" class="replay-counter">0 / 0</span>
+      <label class="speed">Speed
+        <input id="rp-speed" type="range" min="80" max="1200" value="500" step="20">
+      </label>
+      <button id="rp-exit" class="btn btn-ghost">✕ Exit</button>
     </div>
     <svg id="board" viewBox="0 0 1000 780" preserveAspectRatio="xMidYMid meet"></svg>
     <div id="banner" class="banner" hidden></div>
@@ -135,6 +159,6 @@
   </aside>
 </main>
 
-<script src="/static/app.js?v=7"></script>
+<script src="/static/app.js?v=9"></script>
 </body>
 </html>
