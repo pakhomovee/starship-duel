@@ -183,6 +183,9 @@ class GameState:
     turn_clock: float  # counts down from 60s (informational for training)
     ships: List[ShipState]
 
+    # Map-control score per ship, banked at the start of each of their turns.
+    domination: List[int] = field(default_factory=lambda: [0, 0])
+
     # Terminal bookkeeping (None while the skirmish is live).
     winner: Optional[ShipId] = None
     done: bool = False

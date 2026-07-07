@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css?v=9">
+<link rel="stylesheet" href="/static/styles.css?v=10">
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -43,9 +43,16 @@
       down while staying hidden yourself. 1v1, alternating turns, zero-sum, hidden information:
       your exact location is invisible to your rival unless something reveals it.</p>
 
-    <h3>Goal</h3>
-    <p>Win the skirmish by firing on the system your rival is actually in. Get caught on a
-      collapsing (supernova) system and you're destroyed; crash your bot and you forfeit.</p>
+    <h3>Two ways to win</h3>
+    <ul>
+      <li><b>Knockout</b> — <b>Fire</b> on the system your rival is actually in for an instant win.</li>
+      <li><b>Map control</b> — each turn you bank <b>control points</b> equal to your income from
+        the systems you own (single <b>+1</b>, binary <b>+4</b>). First to the target (shown as the
+        <b>CONTROL</b> bar) wins on points. So you can't just hide: you have to come out, <b>Claim</b>
+        territory, defend it, and contest your rival's — which is exactly what exposes you to a
+        knockout. Scanning, cloaking and unlocks are how you tip that risk your way.</li>
+    </ul>
+    <p>Get caught on a collapsing (supernova) system and you're destroyed; crash your bot and you forfeit.</p>
 
     <h3>A turn</h3>
     <ul>
@@ -68,12 +75,12 @@
       <tr><td>Hold</td><td>—</td><td>Stay put and regain cloak.</td></tr>
       <tr><td>Claim</td><td>—</td><td>Take the system you're on for income — exposes you.</td></tr>
       <tr><td>Fire</td><td>—</td><td>Instant win if the rival is here; otherwise a public miss.</td></tr>
-      <tr><td>Scan</td><td>10⚡</td><td>Reveal the rival's exact system — unless they're deep-cloaked.</td></tr>
-      <tr><td>Deep Cloak</td><td>25⚡</td><td>Undetectable for 2 turns — immune to every reveal, even in enemy territory.</td></tr>
-      <tr><td>Overcharge</td><td>40⚡</td><td>Bank +1 extra action for next turn (stacks).</td></tr>
-      <tr><td>Unlock: Proximity Alert</td><td>10⚡</td><td>Permanent: a rival's missed Fire near you reveals them.</td></tr>
-      <tr><td>Unlock: Long-Range Scanners</td><td>40⚡</td><td>Permanent: jumping into the rival's system reveals them.</td></tr>
-      <tr><td>Unlock: Jamming</td><td>25⚡</td><td>Permanent: your Energy actions show to the rival only as “spent Energy”.</td></tr>
+      <tr><td>Scan</td><td>6⚡</td><td>Reveal the rival's exact system — unless they're deep-cloaked.</td></tr>
+      <tr><td>Deep Cloak</td><td>14⚡</td><td>Undetectable for 2 turns — immune to every reveal, even in enemy territory.</td></tr>
+      <tr><td>Overcharge</td><td>18⚡</td><td>Bank +1 extra action for next turn (stacks).</td></tr>
+      <tr><td>Unlock: Proximity Alert</td><td>6⚡</td><td>Permanent: a rival's missed Fire near you reveals them.</td></tr>
+      <tr><td>Unlock: Long-Range Scanners</td><td>20⚡</td><td>Permanent: jumping into the rival's system reveals them.</td></tr>
+      <tr><td>Unlock: Jamming</td><td>14⚡</td><td>Permanent: your Energy actions show to the rival only as “spent Energy”.</td></tr>
     </table>
 
     <h3>Caches</h3>
@@ -159,6 +166,6 @@
   </aside>
 </main>
 
-<script src="/static/app.js?v=9"></script>
+<script src="/static/app.js?v=10"></script>
 </body>
 </html>

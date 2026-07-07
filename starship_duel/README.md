@@ -42,6 +42,30 @@ starship_duel/
 tests/                # test_engine.py, test_rl_web.py, test_arena.py
 ```
 
+## Winning: knockout or map control
+
+There are two ways to win a skirmish:
+
+- **Knockout** — **Fire** on the system the rival is actually in (instant win).
+- **Map control (domination)** — at the start of each of your turns you bank
+  *control points* equal to your income from the systems you own (single `+1`,
+  binary `+4`; collapsed stars pay nothing). First to `domination_target` (50)
+  wins on points (`config.domination_enabled`, on by default).
+
+Map control is what makes the game *dynamic* rather than a staring contest: to
+score you must leave cover and **Claim** territory — which exposes you — then
+defend it and contest the rival's. That exposure is exactly what sets up
+knockouts, and it's why **Scan** (find the claimer), **Deep Cloak** (claim while
+immune to exposure), **Overcharge** (claim more per turn) and the unlocks all
+earn their keep. Both scores are public (`obs.domination`, `domination_target`)
+and shown as the **CONTROL** bars in the web UI. A turn-cap timeout is decided on
+the control race first, then most-systems, else a draw.
+
+The bundled **`heuristic`** bot plays this: it claims and steals binaries, hunts
+and pounces when it gets a fix, buys Deep Cloak to secure a contested claim, and
+— crucially — reads `system_collapse_in` to **evacuate a star before it goes
+supernova** instead of sitting on it.
+
 ## The collapse (shrinking field)
 
 To keep games bounded, the star field **collapses over time**: starting at

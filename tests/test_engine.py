@@ -86,7 +86,7 @@ class TestActionBanking(unittest.TestCase):
     def test_overcharge_banks_and_spends_energy(self):
         e = fresh_engine()
         s = e.current_ship
-        e.state.ships[s].energy = 40
+        e.state.ships[s].energy = e.config.cost_overcharge
         e.apply_action(Action.overcharge())
         self.assertEqual(e.state.ships[s].energy, 0)
         self.assertEqual(e.state.ships[s].banked_overcharge, 1)
@@ -336,6 +336,49 @@ class TestShrinkingField(unittest.TestCase):
                 self.assertEqual(e.collapse_in(first), T - turn)
             else:
                 self.assertEqual(e.state.system_status[first].value, "SUPERNOVA")
+
+
+class TestDomination(unittest.TestCase):
+    def test_income_and_domination_skip_supernova_systems(self):
+        from starship_duel.game.types import SystemStatus
+        e = fresh_engine()
+        s = 0
+        b = next(iter(e.state.binary_systems))
+        e.state.system_owner[b] = s
+        self.assertEqual(e._controlled_income(s), e.config.income_binary)
+        e.state.system_status[b] = SystemStatus.SUPERNOVA
+        self.assertEqual(e._controlled_income(s), 0)  # a dead star pays nothing
+
+    def test_domination_wins_on_points(self):
+        e = fresh_engine(domination_target=8)  # two scored turns owning a binary
+        s = 0  # fresh_engine starts ship 0
+        b = next(iter(e.state.binary_systems))
+        e.state.system_owner[b] = s
+        guard = 0
+        while not e.state.done and guard < 40:
+            e.apply_action(Action.end_turn())  # cycle turns; income banks at each start
+            guard += 1
+        self.assertTrue(e.state.done)
+        self.assertEqual(e.state.end_reason, "domination")
+        self.assertEqual(e.state.winner, s)
+        self.assertGreaterEqual(e.state.domination[s], 8)
+
+    def test_domination_can_be_disabled(self):
+        e = fresh_engine(domination_target=4, domination_enabled=False)
+        e.state.system_owner[next(iter(e.state.binary_systems))] = 0
+        for _ in range(30):
+            if e.state.done:
+                break
+            e.apply_action(Action.end_turn())
+        self.assertNotEqual(e.state.end_reason, "domination")
+
+    def test_timeout_resolved_by_domination(self):
+        e = fresh_engine(turn_cap=1, timeout_resolution="draw")
+        e.state.domination = [7, 3]
+        e.apply_action(Action.end_turn())  # crosses the turn cap
+        self.assertTrue(e.state.done)
+        self.assertEqual(e.state.end_reason, "timeout")
+        self.assertEqual(e.state.winner, 0)  # decided on the control race, not a draw
 
 
 class TestSmoke(unittest.TestCase):

@@ -17,13 +17,31 @@ class GameConfig:
     income_binary: int = 4
     base_actions: int = 2
 
+    # -- domination victory: reward controlling the map ----------------------
+    # Besides the instant-kill FIRE, a ship also wins by out-holding the map:
+    # at the start of each of its turns it banks "domination" points equal to
+    # the income from the systems it currently owns (single -> income_single,
+    # binary -> income_binary; collapsed stars count for nothing).  First to
+    # ``domination_target`` wins.  This is the engine of dynamic play -- to
+    # score you must CLAIM (which exposes you), then defend that territory and
+    # contest the rival's, so scouting, abilities and attacks all earn their
+    # keep instead of hiding until the field collapses.
+    domination_enabled: bool = True
+    domination_target: int = 50
+
     # -- action costs (spec 4) ----------------------------------------------
-    cost_scan: int = 10
-    cost_deep_cloak: int = 25
-    cost_overcharge: int = 40
-    cost_unlock_proximity_alert: int = 10
-    cost_unlock_long_range_scanners: int = 40
-    cost_unlock_jamming: int = 25
+    # Priced against the actual energy budget: a ship earns ~16 Energy over a
+    # typical game (income + caches) and rarely holds more than ~12-25 at once,
+    # so the old 25-40 costs made most abilities unreachable.  These are tiered
+    # so every ability is a real option: cheap tactical tools you can afford most
+    # games, mid unlocks that need a few turns of territory, and power unlocks
+    # that reward a richer economy.
+    cost_scan: int = 6                       # cheap: locate the rival often
+    cost_deep_cloak: int = 14                # mid: claim / sit in enemy space safely
+    cost_overcharge: int = 18                # power: snowball extra actions
+    cost_unlock_proximity_alert: int = 6     # cheap permanent defense
+    cost_unlock_long_range_scanners: int = 20  # power: jump-onto-rival becomes a kill
+    cost_unlock_jamming: int = 14            # mid: hide what you spend Energy on
 
     # Deep Cloak: how many of the ship's own turns it stays undetectable for
     # (immune to exposure + end-of-turn forced fire).  2 => it covers this turn,

@@ -422,16 +422,18 @@ class Engine:
         if self._check_collapse_deaths(events):
             return
 
-        # Income from owned systems.
-        income = 0
-        for sysname, own in st.system_owner.items():
-            if own == s:
-                income += (
-                    cfg.income_binary
-                    if sysname in st.binary_systems
-                    else cfg.income_single
-                )
+        # Income from owned (living) systems -- also the per-turn domination gain.
+        income = self._controlled_income(s)
         ship.energy += income
+
+        # Domination victory: banking this turn's income toward the map-control
+        # target is a second way to win, rewarding held territory (spec: FIRE is
+        # the knockout; domination is the decision on points).
+        if cfg.domination_enabled:
+            st.domination[s] += income
+            if st.domination[s] >= cfg.domination_target:
+                self._win(s, "domination", events)
+                return
 
         ship.actions_remaining = cfg.base_actions + ship.banked_overcharge
         ship.banked_overcharge = 0
@@ -446,6 +448,17 @@ class Engine:
             self._collect_cache(s, cache)
             st.system_cache[ship.position] = None
             self._expose(s, [], reason="cache collection")
+
+    def _controlled_income(self, s: ShipId) -> int:
+        """Income (and domination gain) from the systems ``s`` owns.  A star that
+        has gone supernova is gone -- it pays nothing."""
+        st = self.state
+        cfg = self.config
+        total = 0
+        for sysname, own in st.system_owner.items():
+            if own == s and st.system_status[sysname] is not SystemStatus.SUPERNOVA:
+                total += cfg.income_binary if sysname in st.binary_systems else cfg.income_single
+        return total
 
     def _collect_cache(self, s: ShipId, cache: Cache) -> None:
         ship = self.state.ships[s]
@@ -498,8 +511,14 @@ class Engine:
 
     def _resolve_timeout(self, events: List[str]) -> None:
         st = self.state
+        cfg = self.config
         st.done = True
         st.end_reason = "timeout"
+        # With domination on, a timeout is decided on the map-control race first.
+        if cfg.domination_enabled and st.domination[0] != st.domination[1]:
+            st.winner = 0 if st.domination[0] > st.domination[1] else 1
+            events.append(f"skirmish timeout (winner={st.winner})")
+            return
         if self.config.timeout_resolution == "systems":
             counts = [0, 0]
             for own in st.system_owner.values():

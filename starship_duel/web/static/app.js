@@ -302,6 +302,7 @@ function text(x, y, str, cls) {
 function renderHud(v) {
   const host = $("#hud");
   host.replaceChildren();
+  const domTarget = v.domination_target || 0;
   for (const h of v.hud) {
     const card = document.createElement("div");
     card.className = `ship-card p${h.id}` + (v.turn_ship === h.id && !v.done ? " active" : "");
@@ -309,6 +310,16 @@ function renderHud(v) {
     const posHtml = known ? `<b>${h.position}</b>` : `<span class="pos-hidden">hidden</span>`;
     const badges = Object.entries(h.unlocked).filter(([, on]) => on)
       .map(([k]) => `<span class="badge">${UNLOCK_BADGE[k]}</span>`).join("");
+    // Domination race toward the map-control win.
+    const dom = (v.domination && v.domination[h.id]) || 0;
+    const pct = domTarget ? Math.min(100, Math.round((100 * dom) / domTarget)) : 0;
+    const domCol = h.id === 0 ? "var(--p1)" : "var(--p2-bright)";
+    const domHtml = domTarget ? `
+      <div class="dom" title="Map control — first to ${domTarget} wins">
+        <span class="dom-label">CONTROL</span>
+        <div class="dom-bar"><div class="dom-fill" style="width:${pct}%;background:${domCol}"></div></div>
+        <span class="dom-num">${dom}/${domTarget}</span>
+      </div>` : "";
     card.innerHTML = `
       <svg class="avatar" viewBox="0 0 140 140"><use href="#${h.id === 0 ? "ship-warm" : "ship-cool"}"/></svg>
       <div class="meta">
@@ -320,6 +331,7 @@ function renderHud(v) {
           <span class="stat"><svg class="ic" viewBox="0 0 24 24"><use href="#pip-action"/></svg><b>${h.actions_remaining}</b> act</span>
           <span class="stat"><svg class="ic" viewBox="0 0 64 64"><use href="#res-overcharge"/></svg><b>${h.banked_overcharge}</b> banked</span>
         </div>
+        ${domHtml}
         <div class="badges">${badges}</div>
       </div>`;
     host.appendChild(card);

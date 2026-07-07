@@ -33,6 +33,9 @@ class Observation:
     # in ``system_status`` for the final ``shrink_warning`` plies before it goes.
     system_collapse_in: Dict[System, Optional[int]]
     campaign_score: List[int]
+    # Map-control race (public): points banked per ship and the target to win.
+    domination: List[int]
+    domination_target: int
     skirmish_number: int
     turn_ship: ShipId
     turn_number: int
@@ -43,6 +46,9 @@ class Observation:
     # -- self-private --------------------------------------------------------
     position: System
     cloaked: bool
+    # Turns of Deep Cloak protection left (immune to every exposure trigger and
+    # to end-of-turn forced fire while > 0); 0 when not deep-cloaked.
+    deep_cloak_turns_left: int
     energy: int
     banked_overcharge: int
     actions_remaining: int
@@ -118,6 +124,8 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
         system_cache=cache_view,
         system_collapse_in=collapse_in,
         campaign_score=list(st.campaign_score),
+        domination=list(st.domination),
+        domination_target=engine.config.domination_target,
         skirmish_number=st.skirmish_number,
         turn_ship=st.turn_ship,
         turn_number=st.turn_number,
@@ -126,6 +134,7 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
         rival_last_action=rival.last_public_action,
         position=me.position,
         cloaked=me.cloaked,
+        deep_cloak_turns_left=me.deep_cloak_turns_left,
         energy=me.energy,
         banked_overcharge=me.banked_overcharge,
         actions_remaining=me.actions_remaining,

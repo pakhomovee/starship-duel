@@ -89,6 +89,8 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
         "turn_ship": st.turn_ship,
         "turn_number": st.turn_number,
         "campaign_score": list(st.campaign_score),
+        "domination": list(st.domination),
+        "domination_target": session.config.domination_target,
         "systems": systems,
         "edges": edges,
         "events": session.recent_events(),
