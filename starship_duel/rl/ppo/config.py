@@ -20,6 +20,9 @@ class PPOConfig:
     # -- network ------------------------------------------------------------
     hidden: int = 256
     depth: int = 2
+    # Warm-start the policy from an existing checkpoint (e.g. Phase 2 continuing
+    # from Phase 1).  Must share architecture/map.  None = fresh init.
+    init_from: Optional[str] = None
 
     # -- rollout ------------------------------------------------------------
     episodes_per_update: int = 64      # full self-play games collected per update

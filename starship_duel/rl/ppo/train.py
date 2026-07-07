@@ -33,6 +33,8 @@ def _parse(argv: Optional[List[str]]) -> PPOConfig:
                    help="override worker start method (auto: fork on Linux)")
     p.add_argument("--hidden", type=int, default=cfg.hidden)
     p.add_argument("--depth", type=int, default=cfg.depth)
+    p.add_argument("--init-from", default=cfg.init_from,
+                   help="warm-start policy from a checkpoint (e.g. Phase 1's ckpt_final.pt)")
     p.add_argument("--lr", type=float, default=cfg.lr)
     p.add_argument("--gamma", type=float, default=cfg.gamma)
     p.add_argument("--ent-coef", type=float, default=cfg.ent_coef)
@@ -53,6 +55,7 @@ def _parse(argv: Optional[List[str]]) -> PPOConfig:
     cfg.mp_start_method = a.mp_start_method
     cfg.hidden = a.hidden
     cfg.depth = a.depth
+    cfg.init_from = a.init_from
     cfg.lr = a.lr
     cfg.gamma = a.gamma
     cfg.ent_coef = a.ent_coef

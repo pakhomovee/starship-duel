@@ -39,6 +39,10 @@ class PPOTrainer:
         self.model = MaskedActorCritic(
             self.game.obs_size, self.game.n_actions, hidden=cfg.hidden, depth=cfg.depth
         ).to(self.device)
+        if cfg.init_from:
+            ckpt = torch.load(cfg.init_from, map_location=self.device, weights_only=False)
+            self.model.load_state_dict(ckpt["model_state"])
+            print(f"[ppo] warm-started policy from {cfg.init_from}")
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr, eps=1e-5)
 
         # Rollouts: in-process League, or a pool of worker processes.  Either way
