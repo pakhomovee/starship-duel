@@ -34,12 +34,19 @@ starship_duel/
     subprocess_bot.py # spawns + referees an external program as a Bot
     sdk/python/       # standalone Python SDK + example bot
     sdk/cpp/          # single-header C++ SDK (nlohmann/json) + example bot
+  tournament/       # ── round-robin ladder + Bradley-Terry ranking ──
+    store.py          # SQLite queue (atomic claim) + results + standings
+    registry.py       # server-side bot allowlist (baselines + arena bots)
+    match.py          # play one match (reuses web.session.GameSession)
+    schedule.py       # baseline + full round-robin schedulers (idempotent)
+    scoring.py        # choix Bradley-Terry + bootstrap CIs
+    worker.py, tick.py # match worker loop; 6h standings recompute (cron)
   web/              # ── self-hosted UI (fastapi + uvicorn) ──
     server.py         # REST + WebSocket, serves the static frontend
     session.py        # in-memory games; human input + bot auto-play/stepping
     serialize.py      # game state -> JSON view (player perspective vs. truth)
     static/           # index.html, app.js, styles.css, sprites.svg
-tests/                # test_engine.py, test_rl_web.py, test_arena.py
+tests/                # test_engine.py, test_rl_web.py, test_arena.py, test_tournament.py
 ```
 
 ## Winning: knockout or map control
@@ -290,6 +297,54 @@ and a single-header C++ SDK (`arena/sdk/cpp/starship_bot.hpp`). Any language tha
 can read a line and parse JSON works. A trained PPO/NFSP policy wrapped behind the
 same protocol is just another entry in the same ladder — no special-casing, and a
 sterner strength check than self-play mirrors.
+
+## Tournament (round-robin ladder + Bradley-Terry ranking)
+
+`starship_duel/tournament/` runs a competition over arena bots: it schedules
+matches, plays them on trusted host workers, stores each as a replayable game, and
+ranks competitors with a regularized **Bradley-Terry** model (via `choix`) with
+bootstrap 90% confidence intervals. The referee (engine) is trusted and runs on the
+host; each bot is only ever the arena subprocess above, so a bad bot can strike or
+forfeit but never corrupt a match.
+
+Competitors come from a server-side **allowlist** (never the DB or a web request) —
+`$STARSHIP_TOURNEY_BOTS` JSON, same trust model as `arena_bots.json`:
+
+```json
+{ "alice": {"command": ["python","bots/alice.py"], "timeout": 1.0} }
+```
+
+Plus the four **baselines** (`random`, `heuristic`, `ppo-easy`, `ppo-medium`) that
+every ladder includes — the during-contest "partial standings" opponents.
+
+```bash
+# schedule participant-vs-baseline matches (partial standings) — admin endpoint,
+# or from Python: tournament.schedule.enqueue_baselines(store, n_each=10)
+curl -XPOST localhost:8000/api/tournament/schedule/baselines?n_each=10 \
+     -H "X-Admin-Token: $STARSHIP_ADMIN_TOKEN"
+
+# run match workers (safe to run several processes / --workers threads at once;
+# the SQLite claim is atomic, so no match is ever played twice)
+python -m starship_duel.tournament.worker --workers 4
+
+# publish "current standings" — wire to cron every 6h during the contest:
+#   0 */6 * * *  cd /srv/starship && python -m starship_duel.tournament.tick
+python -m starship_duel.tournament.tick --scope quick
+
+# after the deadline: full all-pairs round robin, then the final ranking
+curl -XPOST localhost:8000/api/tournament/schedule/full?n_each=10 \
+     -H "X-Admin-Token: $STARSHIP_ADMIN_TOKEN"
+python -m starship_duel.tournament.tick --scope full
+```
+
+Standings are read-only and public (`GET /api/tournament/standings?scope=quick|full`);
+scheduling and `POST /api/tournament/recompute` require the `X-Admin-Token` header
+(set `$STARSHIP_ADMIN_TOKEN`, else those write endpoints are disabled). Tournament
+games are ordinary recorded replays, so each standings row's `replay_rid` opens in
+the existing viewer via `GET /api/games/{rid}/replay`. State lives in SQLite
+(`$STARSHIP_TOURNEY_DB`, default `starship_tournament.db`). Bots are **not**
+sandboxed yet — v1 runs them as host subprocesses, so only accept trusted
+submissions until the planned Docker isolation lands.
 
 ## Quick start
 

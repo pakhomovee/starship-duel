@@ -60,6 +60,37 @@ def test_graph_encoder_shapes_and_padding():
         assert np.allclose(g.adjacency[:n, :n], g.adjacency[:n, :n].T)
 
 
+def test_encoder_surfaces_domination_and_belief():
+    """The enriched state space must actually carry the map-control race, the
+    fuzzy rival-belief set, and per-node income -- the info the win condition
+    depends on."""
+    from starship_duel.env import StarshipDuelEnv
+
+    enc = GraphObsEncoder(sorted(get_map("map1").systems))
+    env = StarshipDuelEnv()
+    env.reset(map_id="map1", first_ship=0)
+    # Advance a few plies so ownership/domination diverge from the initial zero.
+    for _ in range(6):
+        if env.done:
+            break
+        a = env.observe(env.agent_selection).legal_actions[0]
+        env.step(a)
+    obs = env.observe(env.agent_selection)
+
+    g = enc.encode(obs)
+    # New node columns exist and income weight is one of {0, 0.25, 1.0}.
+    assert g.node_features.shape[1] == enc.node_dim >= 22
+    inc_col = g.node_features[: enc.n, 21]
+    assert set(np.unique(inc_col)).issubset({0.0, 0.25, 1.0})
+    # At least one node flagged as a rival candidate (belief set is non-empty
+    # right after spawn, when initial positions are revealed).
+    assert g.node_features[: enc.n, 20].sum() >= 1.0
+    # Globals are finite, bounded, and include the 7 new race/immunity signals.
+    assert g.global_features.shape[0] == enc.global_dim
+    assert np.all(np.isfinite(g.global_features))
+    assert np.all(g.global_features[-7:] >= -1.0) and np.all(g.global_features[-7:] <= 1.0)
+
+
 def test_action_codec_roundtrip_and_verb_layout():
     codec = UniversalActionCodec(sorted(get_map("map3").systems))
     assert codec.n_actions == MAX_SYSTEMS + 10

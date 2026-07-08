@@ -27,7 +27,12 @@ class GameConfig:
     # contest the rival's, so scouting, abilities and attacks all earn their
     # keep instead of hiding until the field collapses.
     domination_enabled: bool = True
-    domination_target: int = 50
+    # Lowered from 50: at 50 the points race never resolved a competitive game
+    # (knockouts ended things at ~turn 8, control only ~13-15 by then), so
+    # domination was decorative.  ~25 makes out-controlling the map a win path
+    # that can actually fire before a knockout, so hiding loses on points and
+    # players are forced out to CLAIM/contest.  Tune from results.
+    domination_target: int = 25
 
     # -- action costs (spec 4) ----------------------------------------------
     # Priced against the actual energy budget: a ship earns ~16 Energy over a

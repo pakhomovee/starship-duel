@@ -16,6 +16,9 @@ torch>=2.6
 # --- training telemetry (optional; PPO logs scalars if importable) ---
 tensorboard>=2.16
 
+# --- tournament scoring (starship_duel/tournament) ---
+choix>=0.3.5      # Bradley-Terry pairwise ranking (pulls scipy)
+
 # --- dev ---
 pytest>=8.0
 httpx>=0.27      # fastapi TestClient (web API tests)

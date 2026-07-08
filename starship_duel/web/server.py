@@ -23,6 +23,13 @@ from pydantic import BaseModel
 from ..bots import REGISTRY
 from ..game import GameConfig
 from ..game.maps import MAPS
+from ..tournament import BotRegistry, TournamentStore
+from ..tournament.schedule import (
+    enqueue_baselines,
+    enqueue_full_round_robin,
+    register_competitors,
+)
+from ..tournament.scoring import compute_bt
 from .history import GameStore
 from .serialize import serialize
 from .session import GameSession
@@ -52,6 +59,15 @@ STORE = GameStore()
 # If set, every /api and /ws request must present this token (query ?token= or
 # X-Access-Token header).  Share the UI as http://host:port/?token=<token>.
 ACCESS_TOKEN = os.environ.get("STARSHIP_ACCESS_TOKEN") or None
+# Tournament admin actions (schedule, recompute) require this token in an
+# X-Admin-Token header; if unset, those write endpoints are disabled entirely.
+# Read-only standings stay open (behind the normal ACCESS_TOKEN gate, if any).
+ADMIN_TOKEN = os.environ.get("STARSHIP_ADMIN_TOKEN") or None
+# Tournament state (queue + results + standings) and the bot allowlist. Workers
+# run in separate processes (python -m starship_duel.tournament.worker); the API
+# only schedules, reports standings, and triggers recomputes.
+TOURNEY = TournamentStore()
+TOURNEY_BOTS = BotRegistry()
 # The DeepSeek bot spends real API credits, so it's hidden from the web surface
 # unless explicitly enabled (it stays available on the CLI regardless).
 DEEPSEEK_ENABLED = bool(os.environ.get("STARSHIP_ENABLE_DEEPSEEK"))
@@ -230,6 +246,61 @@ def delete_game(rid: str):
     if not STORE.delete(rid):
         raise HTTPException(404, f"no recorded game {rid}")
     return {"deleted": rid}
+
+
+# --------------------------------------------------------------------------- #
+# Tournament: standings (public) + scheduling/recompute (admin)               #
+# --------------------------------------------------------------------------- #
+def _require_admin(request: Request) -> None:
+    if not ADMIN_TOKEN:
+        raise HTTPException(503, "tournament admin disabled (set STARSHIP_ADMIN_TOKEN)")
+    tok = request.headers.get("x-admin-token") or request.query_params.get("admin_token")
+    if tok != ADMIN_TOKEN:
+        raise HTTPException(403, "admin token required")
+
+
+def _check_scope(scope: str) -> str:
+    if scope not in ("quick", "full"):
+        raise HTTPException(400, "scope must be 'quick' or 'full'")
+    return scope
+
+
+@app.get("/api/tournament/standings")
+def tournament_standings(scope: str = "quick"):
+    """Latest cached Bradley-Terry snapshot (populated by tick / recompute)."""
+    snap = TOURNEY.get_standings(_check_scope(scope))
+    return snap or {"scope": scope, "computed": None, "rows": []}
+
+
+@app.get("/api/tournament/matches")
+def tournament_matches(status: Optional[str] = None, limit: int = 200):
+    return {"counts": TOURNEY.status_counts(),
+            "matches": TOURNEY.list_matches(status=status, limit=limit)}
+
+
+@app.post("/api/tournament/recompute")
+def tournament_recompute(request: Request, scope: str = "quick"):
+    _require_admin(request)
+    rows = compute_bt(TOURNEY, _check_scope(scope))
+    return {"scope": scope, "rows": rows}
+
+
+@app.post("/api/tournament/schedule/baselines")
+def tournament_schedule_baselines(request: Request, n_each: int = 10):
+    _require_admin(request)
+    TOURNEY_BOTS.reload()
+    register_competitors(TOURNEY, TOURNEY_BOTS)
+    added = enqueue_baselines(TOURNEY, n_each=n_each)
+    return {"added": added, "counts": TOURNEY.status_counts()}
+
+
+@app.post("/api/tournament/schedule/full")
+def tournament_schedule_full(request: Request, n_each: int = 10):
+    _require_admin(request)
+    TOURNEY_BOTS.reload()
+    register_competitors(TOURNEY, TOURNEY_BOTS)
+    added = enqueue_full_round_robin(TOURNEY, n_each=n_each)
+    return {"added": added, "counts": TOURNEY.status_counts()}
 
 
 # --------------------------------------------------------------------------- #

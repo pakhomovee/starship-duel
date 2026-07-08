@@ -3,10 +3,17 @@ vector -- the key to map-universality.
 
 Each system becomes a node with **identity-free** features (owner, status,
 binary, cache, whether it's my position / a neighbour / the rival's known or
-last-seen system, collapse timer, degree, and BFS hop-distances to me and to the
+last-seen system, whether it's in the rival's fuzzy "could be here" belief set,
+its income value, collapse timer, degree, and BFS hop-distances to me and to the
 rival's last-seen system).  The map's edges become the adjacency matrix.  Nothing
 here depends on a system's *name* or a fixed index, so the same encoder works on
 any map.
+
+Graph-level (global) features cover the ship's own economy/unlocks *and the
+map-control race that now decides games*: each side's domination progress toward
+the target, each side's income rate, the ship's Deep-Cloak protection window, and
+how much of the field is still alive.  Without these the net was blind to the
+whole domination win condition it is being rewarded for.
 
 Everything is padded to a fixed ``MAX_SYSTEMS`` so batching is a plain stack; a
 ``node_mask`` marks the real nodes.  Node ``i`` corresponds to the ``i``-th entry
@@ -33,7 +40,7 @@ MAX_SYSTEMS = 32
 _STATUS_IDX = {"STABLE": 0, "DESTABILIZING": 1, "SUPERNOVA": 2}
 
 # Per-node feature width (see encode()).
-NODE_DIM = 20
+NODE_DIM = 22
 
 
 @dataclass
@@ -80,7 +87,24 @@ class GraphObsEncoder:
             + len(_RIVAL_ACTION_VOCAB)
             + 1    # n_systems (map-size hint)
             + 1    # n_binaries
+            + 1    # my domination progress (/target)
+            + 1    # rival domination progress (/target)
+            + 1    # domination gap (mine - rival, signed)
+            + 1    # my income rate (points banked per turn)
+            + 1    # rival income rate
+            + 1    # my Deep-Cloak turns left (immunity window)
+            + 1    # fraction of the field still alive (collapse macro-signal)
         )
+
+    # Config-independent income weight of a system to its owner: binaries pay the
+    # most, collapsed stars nothing.  We use a fixed ratio (binary : single =
+    # 1 : 0.25) rather than the raw config so the encoder needs no GameConfig and
+    # the net just learns the scale -- this drives the domination race.
+    @staticmethod
+    def _income_wt(status: str, is_binary: bool) -> float:
+        if status == "SUPERNOVA":
+            return 0.0
+        return 1.0 if is_binary else 0.25
 
     # -- public --------------------------------------------------------------
     def encode(self, obs: Observation) -> GraphObs:
@@ -95,6 +119,16 @@ class GraphObsEncoder:
         binaries = set(obs.binary_systems)
         dist_me = _bfs(obs.adjacency, my_pos)
         dist_seen = _bfs(obs.adjacency, obs.rival_last_seen)
+
+        # Fuzzy belief: systems the (cloaked) rival could currently occupy.  When
+        # the rival is pinned we mark just that node; otherwise it's everything
+        # within ``rival_moves_since_seen`` hops of where it was last confirmed --
+        # the same reachability set the heuristic bot hunts over.
+        if obs.rival_position is not None:
+            candidates = {obs.rival_position}
+        else:
+            reach = obs.rival_moves_since_seen
+            candidates = {s for s, d in dist_seen.items() if d <= reach}
 
         for s, i in self._idx.items():
             b = nf[i]
@@ -126,6 +160,8 @@ class GraphObsEncoder:
             b[17] = min(len(obs.adjacency.get(s, [])) / 8.0, 1.0)
             b[18] = min(dist_me.get(s, 10) / 10.0, 1.0)
             b[19] = min(dist_seen.get(s, 10) / 10.0, 1.0) if dist_seen else 1.0
+            b[20] = 1.0 if s in candidates else 0.0
+            b[21] = self._income_wt(obs.system_status.get(s, "STABLE"), s in binaries)
 
             for nb in obs.adjacency.get(s, []):
                 j = self._idx.get(nb)
@@ -160,4 +196,34 @@ class GraphObsEncoder:
         g[i + k] = 1.0; i += len(_RIVAL_ACTION_VOCAB)
         g[i] = min(self.n / float(self.max_systems), 1.0); i += 1
         g[i] = min(len(obs.binary_systems) / 5.0, 1.0); i += 1
+
+        # -- the map-control race (the win condition the net is rewarded for) ---
+        me_id, them_id = obs.ship_id, 1 - obs.ship_id
+        tgt = float(max(obs.domination_target, 1))
+        my_dom = min(obs.domination[me_id] / tgt, 1.0)
+        rival_dom = min(obs.domination[them_id] / tgt, 1.0)
+        g[i] = my_dom; i += 1
+        g[i] = rival_dom; i += 1
+        g[i] = float(np.clip(my_dom - rival_dom, -1.0, 1.0)); i += 1
+
+        binaries = set(obs.binary_systems)
+        my_inc = rival_inc = 0.0
+        for s, owner in obs.system_owner.items():
+            if owner is None:
+                continue
+            w = self._income_wt(obs.system_status.get(s, "STABLE"), s in binaries)
+            if owner == me_id:
+                my_inc += w
+            elif owner == them_id:
+                rival_inc += w
+        g[i] = min(my_inc / 3.0, 1.0); i += 1
+        g[i] = min(rival_inc / 3.0, 1.0); i += 1
+
+        # Deep-Cloak immunity window (0 when not deep-cloaked).
+        g[i] = min(obs.deep_cloak_turns_left / 2.0, 1.0); i += 1
+
+        # How much of the field is still alive -- a macro read on the collapse.
+        alive = sum(1 for s in self.systems
+                    if obs.system_status.get(s, "STABLE") != "SUPERNOVA")
+        g[i] = alive / float(self.n); i += 1
         return g

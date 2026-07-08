@@ -32,12 +32,16 @@ class GameSession:
         map_id: Optional[str] = None,
         arena=None,
         store=None,
+        first_mover: Optional[int] = None,
+        bot_overrides: Optional[Dict[int, Bot]] = None,
     ):
         self.id = f"g{next(_ids)}"
         self.controllers = controllers  # {0: "human"|botname|"arena:<name>", 1: ...}
         self.config = config or GameConfig()
         self.seed = seed
         self.map_id = map_id
+        # Which ship moves first this skirmish (None -> engine default/random).
+        self.first_mover = first_mover
         self.arena = arena  # web.arena_registry.ArenaBots (or None)
         self.store = store  # web.history.GameStore (or None) -> persist replays
         self.lock = threading.Lock()
@@ -49,11 +53,17 @@ class GameSession:
         self._saved: bool = False
 
         self.env = StarshipDuelEnv(config=self.config, seed=seed)
-        self.bots: Dict[int, Bot] = {
-            s: self._build_controller(name, None if seed is None else seed + s)
-            for s, name in controllers.items()
-            if name != "human"
-        }
+        # Callers (e.g. the tournament match runner) may inject already-built bot
+        # instances directly; otherwise controllers are resolved by name through
+        # the bot/arena registries.
+        if bot_overrides is not None:
+            self.bots: Dict[int, Bot] = dict(bot_overrides)
+        else:
+            self.bots = {
+                s: self._build_controller(name, None if seed is None else seed + s)
+                for s, name in controllers.items()
+                if name != "human"
+            }
         self.events: List[str] = []
         self.reset()
 
@@ -84,7 +94,7 @@ class GameSession:
 
     # -- lifecycle -----------------------------------------------------------
     def reset(self) -> None:
-        self.env.reset(map_id=self.map_id, first_ship=None)
+        self.env.reset(map_id=self.map_id, first_ship=self.first_mover)
         for b in self.bots.values():
             b.reset()
         self.events = []
