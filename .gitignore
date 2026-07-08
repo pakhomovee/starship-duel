@@ -6,3 +6,9 @@ starship_duel/bots/__pycache__/
 # recorded game history / replays (see web/history.py)
 starship_games.db
 *.db
+
+# tournament: materialized submission bots (see tournament/accounts.py)
+submissions/
+
+*.db-shm
+*.db-wal

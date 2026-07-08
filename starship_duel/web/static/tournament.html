@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starship Duel — Tournament</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css?v=11">
+<link rel="stylesheet" href="/static/tournament.css?v=11">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-kicker">Bot Ladder</span>
+    <h1>Starship&nbsp;Duel — Tournament</h1>
+  </div>
+  <div class="setup" id="auth-area">
+    <!-- filled by tournament.js: either a login form or a user chip -->
+  </div>
+  <div class="setup">
+    <a class="btn btn-ghost" href="/">▸ Play</a>
+  </div>
+</header>
+
+<main class="tourney">
+  <!-- Leaderboard (public) -->
+  <section class="panel" id="board-panel">
+    <div class="panel-head">
+      <h2>Standings</h2>
+      <div class="seg" id="scope-seg">
+        <button class="seg-btn is-on" data-scope="quick">Live (partial)</button>
+        <button class="seg-btn" data-scope="full">Final (all-pairs)</button>
+      </div>
+      <span class="stamp" id="board-stamp"></span>
+    </div>
+    <div id="board-body"><p class="hint">Loading…</p></div>
+  </section>
+
+  <!-- Submit a bot (logged-in) -->
+  <section class="panel" id="submit-panel" hidden>
+    <h2>Your bot</h2>
+    <p class="hint">Upload a single-file bot — <code>.py</code> (Python) or
+      <code>.cpp</code> (C++, compiled on the server). It's scanned, smoke-tested
+      against <b>random</b>, and — if it passes — becomes your active entry. Use the
+      bundled SDK (<code>starship_sdk</code> / <code>starship_bot.hpp</code>) or speak
+      the JSON protocol directly.</p>
+    <div class="uploader">
+      <input type="file" id="sub-file" accept=".py,.cpp,.cc,.cxx">
+      <button class="btn btn-primary" id="sub-upload">Submit bot</button>
+      <span id="sub-result" class="sub-result"></span>
+    </div>
+    <div id="my-subs" class="subs-list"></div>
+  </section>
+
+  <!-- Admin -->
+  <section class="panel" id="admin-panel" hidden>
+    <h2>Admin</h2>
+    <div class="admin-grid">
+      <div class="admin-card">
+        <h3>Create user</h3>
+        <div class="row">
+          <input id="nu-name" placeholder="username">
+          <input id="nu-pass" type="password" placeholder="password">
+          <label class="chk"><input type="checkbox" id="nu-admin"> admin</label>
+          <button class="btn" id="nu-create">Create</button>
+        </div>
+        <span id="nu-result" class="hint"></span>
+        <div id="users-list" class="mini-list"></div>
+      </div>
+
+      <div class="admin-card">
+        <h3>Tournament control</h3>
+        <div class="row">
+          <label>Games each <input id="sched-n" type="number" value="10" min="1" style="width:70px"></label>
+          <button class="btn" id="sched-base">Schedule vs baselines</button>
+          <button class="btn" id="sched-full">Schedule full round-robin</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="recompute-quick">Recompute live</button>
+          <button class="btn" id="recompute-full">Recompute final</button>
+          <span id="queue-status" class="hint"></span>
+        </div>
+        <span id="admin-msg" class="hint"></span>
+      </div>
+
+      <div class="admin-card wide">
+        <h3>All submissions</h3>
+        <div id="all-subs" class="mini-list"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/static/tournament.js?v=11"></script>
+</body>
+</html>

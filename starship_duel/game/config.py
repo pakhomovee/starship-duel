@@ -41,12 +41,18 @@ class GameConfig:
     # so every ability is a real option: cheap tactical tools you can afford most
     # games, mid unlocks that need a few turns of territory, and power unlocks
     # that reward a richer economy.
-    cost_scan: int = 6                       # cheap: locate the rival often
+    # Rebalance iteration 1 (with domination on): energy and domination share the
+    # same income stream, so total spendable energy over a game ~= domination_target
+    # (~25) and the winning line -- claim, accrue, win on points -- needs no
+    # spending.  Only DEEP_CLOAK earned its keep (it defends a control lead).  So
+    # OVERCHARGE and the power unlocks are cut hard, and caches (below) are boosted
+    # to create spendable surplus that does NOT advance domination.
+    cost_scan: int = 4                       # cheap: locate the rival often
     cost_deep_cloak: int = 14                # mid: claim / sit in enemy space safely
-    cost_overcharge: int = 18                # power: snowball extra actions
+    cost_overcharge: int = 6                 # was 18: +1 action must be cheap to snowball claims
     cost_unlock_proximity_alert: int = 6     # cheap permanent defense
-    cost_unlock_long_range_scanners: int = 20  # power: jump-onto-rival becomes a kill
-    cost_unlock_jamming: int = 14            # mid: hide what you spend Energy on
+    cost_unlock_long_range_scanners: int = 10  # was 20: make jump-onto-rival kills a real threat
+    cost_unlock_jamming: int = 8             # was 14: affordable once abilities are worth hiding
 
     # Deep Cloak: how many of the ship's own turns it stays undetectable for
     # (immune to exposure + end-of-turn forced fire).  2 => it covers this turn,
@@ -61,8 +67,8 @@ class GameConfig:
     # ``cache_spawn_period`` turns at a random eligible system, and uncollected
     # caches grow -- turning them into juicy-but-exposing objectives worth
     # fighting over.  All values are tunable.
-    max_active_caches: int = 3
-    cache_spawn_period: int = 3         # turns between spawn attempts (0 = never)
+    max_active_caches: int = 4          # was 3: more spendable surplus (caches do NOT advance domination)
+    cache_spawn_period: int = 2         # was 3: more contested energy on the map (grabbing exposes you)
     cache_base_single: int = 10
     cache_base_binary: int = 20
     cache_upgrade_period: int = 4       # turns between upgrade ticks

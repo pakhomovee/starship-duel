@@ -56,14 +56,30 @@ def _load_specs(path: Optional[str]) -> Dict[str, dict]:
 
 
 class BotRegistry:
-    """Loaded once; builds a fresh :class:`Bot` for a competitor on demand."""
+    """Loaded once; builds a fresh :class:`Bot` for a competitor on demand.
 
-    def __init__(self, path: Optional[str] = None):
+    Launch specs come from two trusted sources, merged in :meth:`reload`:
+      * the static JSON allowlist (``path`` / ``$STARSHIP_TOURNEY_BOTS``), and
+      * validated **active submissions** in an :class:`AccountStore`, materialized
+        to ``submissions_dir`` -- so a user's uploaded bot competes under their
+        username with no manual config.
+    """
+
+    def __init__(self, path: Optional[str] = None, *, account_store=None,
+                 submissions_dir: Optional[str] = None):
         self.path = path
-        self.specs = _load_specs(path)
+        self.account_store = account_store
+        self.submissions_dir = submissions_dir
+        self.specs: Dict[str, dict] = {}
+        self.reload()
 
     def reload(self) -> None:
-        self.specs = _load_specs(self.path)
+        specs = _load_specs(self.path)
+        if self.account_store is not None:
+            from .accounts import materialize_active
+            # Submissions win over any same-named JSON entry.
+            specs.update(materialize_active(self.account_store, self.submissions_dir))
+        self.specs = specs
 
     def bot_ids(self) -> List[str]:
         """Participant (non-baseline) competitor ids available in the allowlist."""

@@ -5,6 +5,7 @@
 # --- web interface (starship_duel/web) ---
 fastapi>=0.139
 uvicorn[standard]>=0.50
+python-multipart>=0.0.9   # multipart bot-submission uploads (tournament)
 networkx>=3.0     # crossing-free (planar) map layouts; degrades to a circle if absent
 
 # --- RL adapters (starship_duel/rl) ---

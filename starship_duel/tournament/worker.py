@@ -17,6 +17,7 @@ from typing import Optional
 
 from ..game import GameConfig
 from ..web.history import GameStore
+from .accounts import AccountStore
 from .match import run_match
 from .registry import BotRegistry
 from .store import TournamentStore
@@ -48,7 +49,9 @@ def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description="Starship Duel tournament match worker")
     ap.add_argument("--db", default=None, help="tournament sqlite path ($STARSHIP_TOURNEY_DB)")
     ap.add_argument("--games-db", default=None, help="replay sqlite path ($STARSHIP_GAMES_DB)")
+    ap.add_argument("--accounts-db", default=None, help="accounts sqlite path ($STARSHIP_ACCOUNTS_DB)")
     ap.add_argument("--bots", default=None, help="bot allowlist json ($STARSHIP_TOURNEY_BOTS)")
+    ap.add_argument("--submissions-dir", default=None, help="where to materialize submission bots")
     ap.add_argument("--workers", type=int, default=1, help="concurrent worker threads")
     ap.add_argument("--max", type=int, default=None, help="stop after this many matches (per worker)")
     ap.add_argument("--once", action="store_true", help="exit when the queue is empty")
@@ -56,7 +59,10 @@ def main(argv=None) -> None:
 
     tstore = TournamentStore(args.db)
     game_store = GameStore(args.games_db)
-    registry = BotRegistry(args.bots)
+    # Wire the AccountStore so validated submissions resolve to runnable bots
+    # (the same competitors the API scheduled).
+    registry = BotRegistry(args.bots, account_store=AccountStore(args.accounts_db),
+                           submissions_dir=args.submissions_dir)
     base = f"{socket.gethostname()}:{os.getpid()}"
 
     threads = []

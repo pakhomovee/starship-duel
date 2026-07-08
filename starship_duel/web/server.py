@@ -15,7 +15,16 @@ import os
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -24,6 +33,7 @@ from ..bots import REGISTRY
 from ..game import GameConfig
 from ..game.maps import MAPS
 from ..tournament import BotRegistry, TournamentStore
+from ..tournament.accounts import AccountStore, smoke_test, static_scan
 from ..tournament.schedule import (
     enqueue_baselines,
     enqueue_full_round_robin,
@@ -67,7 +77,19 @@ ADMIN_TOKEN = os.environ.get("STARSHIP_ADMIN_TOKEN") or None
 # run in separate processes (python -m starship_duel.tournament.worker); the API
 # only schedules, reports standings, and triggers recomputes.
 TOURNEY = TournamentStore()
-TOURNEY_BOTS = BotRegistry()
+# Accounts / sessions / submissions. Active validated submissions are surfaced to
+# the match registry as competitors (keyed by username).
+ACCOUNTS = AccountStore()
+TOURNEY_BOTS = BotRegistry(account_store=ACCOUNTS)
+SESSION_COOKIE = "sd_session"
+MAX_SUBMISSIONS_PER_DAY = int(os.environ.get("STARSHIP_MAX_SUBMISSIONS_PER_DAY", "20"))
+
+# Seed an initial admin so the tournament is manageable out of the box. Set both
+# env vars once; thereafter the admin creates the rest of the accounts.
+_admin_user = os.environ.get("STARSHIP_ADMIN_USER")
+_admin_pass = os.environ.get("STARSHIP_ADMIN_PASSWORD")
+if _admin_user and _admin_pass:
+    ACCOUNTS.ensure_admin(_admin_user, _admin_pass)
 # The DeepSeek bot spends real API credits, so it's hidden from the web surface
 # unless explicitly enabled (it stays available on the CLI regardless).
 DEEPSEEK_ENABLED = bool(os.environ.get("STARSHIP_ENABLE_DEEPSEEK"))
@@ -105,6 +127,17 @@ class CreateGame(BaseModel):
 class HumanAction(BaseModel):
     type: str
     dest: Optional[str] = None
+
+
+class LoginReq(BaseModel):
+    username: str
+    password: str
+
+
+class CreateUserReq(BaseModel):
+    username: str
+    password: str
+    is_admin: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -251,18 +284,113 @@ def delete_game(rid: str):
 # --------------------------------------------------------------------------- #
 # Tournament: standings (public) + scheduling/recompute (admin)               #
 # --------------------------------------------------------------------------- #
+def _current_user(request: Request) -> Optional[dict]:
+    return ACCOUNTS.resolve_session(request.cookies.get(SESSION_COOKIE))
+
+
+def _require_user(request: Request) -> dict:
+    u = _current_user(request)
+    if u is None:
+        raise HTTPException(401, "login required")
+    return u
+
+
 def _require_admin(request: Request) -> None:
-    if not ADMIN_TOKEN:
-        raise HTTPException(503, "tournament admin disabled (set STARSHIP_ADMIN_TOKEN)")
+    """Admin gate: a logged-in admin *user*, or the shared admin token (for cron
+    / CLI).  Either is sufficient."""
+    u = _current_user(request)
+    if u is not None and u["is_admin"]:
+        return
     tok = request.headers.get("x-admin-token") or request.query_params.get("admin_token")
-    if tok != ADMIN_TOKEN:
-        raise HTTPException(403, "admin token required")
+    if ADMIN_TOKEN and tok == ADMIN_TOKEN:
+        return
+    raise HTTPException(403, "admin only")
 
 
 def _check_scope(scope: str) -> str:
     if scope not in ("quick", "full"):
         raise HTTPException(400, "scope must be 'quick' or 'full'")
     return scope
+
+
+@app.post("/api/login")
+def login(req: LoginReq, response: Response):
+    u = ACCOUNTS.verify_login(req.username, req.password)
+    if u is None:
+        raise HTTPException(401, "invalid username or password")
+    token = ACCOUNTS.create_session(u["id"])
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=7 * 24 * 3600)
+    return {"username": u["username"], "is_admin": bool(u["is_admin"])}
+
+
+@app.post("/api/logout")
+def logout(request: Request, response: Response):
+    ACCOUNTS.delete_session(request.cookies.get(SESSION_COOKIE))
+    response.delete_cookie(SESSION_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/me")
+def me(request: Request):
+    u = _current_user(request)
+    if u is None:
+        return {"authenticated": False}
+    return {"authenticated": True, "username": u["username"], "is_admin": bool(u["is_admin"])}
+
+
+@app.post("/api/admin/users")
+def admin_create_user(req: CreateUserReq, request: Request):
+    _require_admin(request)
+    if ACCOUNTS.get_user_by_name(req.username) is not None:
+        raise HTTPException(409, f"user {req.username!r} already exists")
+    uid = ACCOUNTS.create_user(req.username, req.password, is_admin=req.is_admin)
+    return {"id": uid, "username": req.username, "is_admin": req.is_admin}
+
+
+@app.get("/api/admin/users")
+def admin_list_users(request: Request):
+    _require_admin(request)
+    return {"users": ACCOUNTS.list_users()}
+
+
+@app.post("/api/submissions")
+async def upload_submission(request: Request, file: UploadFile = File(...)):
+    """Upload a single-file bot: static-scan, smoke-test vs random, and (on pass)
+    make it this user's active competitor. Synchronous so authors get instant
+    feedback."""
+    u = _require_user(request)
+    if ACCOUNTS.recent_submission_count(u["id"], 24 * 3600) >= MAX_SUBMISSIONS_PER_DAY:
+        raise HTTPException(429, f"daily submission limit reached ({MAX_SUBMISSIONS_PER_DAY})")
+    code = await file.read()
+    sub_id = ACCOUNTS.add_submission(u["id"], u["username"], file.filename, code)
+
+    reason = static_scan(code, file.filename)
+    if reason:
+        ACCOUNTS.set_submission_status(sub_id, "rejected", reason)
+        return {"id": sub_id, "status": "rejected", "message": reason, "active": False}
+
+    ok, msg = smoke_test(code, file.filename, out_dir=TOURNEY_BOTS.submissions_dir)
+    if not ok:
+        ACCOUNTS.set_submission_status(sub_id, "rejected", msg)
+        return {"id": sub_id, "status": "rejected", "message": msg, "active": False}
+
+    ACCOUNTS.set_submission_status(sub_id, "validated", msg, make_active=True)
+    # Surface the freshly-activated bot to the match registry + competitor list.
+    TOURNEY_BOTS.reload()
+    register_competitors(TOURNEY, TOURNEY_BOTS)
+    return {"id": sub_id, "status": "validated", "message": msg, "active": True}
+
+
+@app.get("/api/submissions")
+def my_submissions(request: Request):
+    u = _require_user(request)
+    return {"submissions": ACCOUNTS.list_user_submissions(u["id"])}
+
+
+@app.get("/api/admin/submissions")
+def all_submissions(request: Request):
+    _require_admin(request)
+    return {"submissions": ACCOUNTS.list_all_submissions()}
 
 
 @app.get("/api/tournament/standings")
@@ -384,6 +512,11 @@ app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 @app.get("/")
 def index():
     return FileResponse(str(_STATIC / "index.html"))
+
+
+@app.get("/tournament")
+def tournament_page():
+    return FileResponse(str(_STATIC / "tournament.html"))
 
 
 def main():

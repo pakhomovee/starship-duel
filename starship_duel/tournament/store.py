@@ -97,6 +97,19 @@ class TournamentStore:
             r = conn.execute("SELECT * FROM competitors WHERE id=?", (cid,)).fetchone()
         return dict(r) if r else None
 
+    def remove_competitor(self, cid: str, *, drop_pending: bool = True) -> None:
+        """Drop a competitor from the ladder. By default also removes their not-
+        yet-played matches (so workers don't try to launch a deleted bot); done
+        matches + replays are kept for history."""
+        with self._lock, self._connect() as conn:
+            if drop_pending:
+                conn.execute(
+                    "DELETE FROM matches WHERE (a_id=? OR b_id=?) "
+                    "AND status IN ('pending','running')",
+                    (cid, cid),
+                )
+            conn.execute("DELETE FROM competitors WHERE id=?", (cid,))
+
     def list_competitors(self, *, kind: Optional[str] = None,
                          active_only: bool = False) -> List[dict]:
         q = "SELECT * FROM competitors"
