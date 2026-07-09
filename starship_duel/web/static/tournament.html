@@ -11,10 +11,15 @@
 <link rel="stylesheet" href="/static/tournament.css?v=11">
 </head>
 <body>
+<!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
+<div id="sprite-host" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></div>
 <header class="topbar">
   <div class="brand">
-    <span class="brand-kicker">Bot Ladder</span>
-    <h1>Starship&nbsp;Duel — Tournament</h1>
+    <svg class="brand-logo" width="40" height="40"><use href="#tour-logo"/></svg>
+    <div>
+      <span class="brand-kicker">Bot Ladder</span>
+      <h1>Starship&nbsp;Duel — Tournament</h1>
+    </div>
   </div>
   <div class="setup" id="auth-area">
     <!-- filled by tournament.js: either a login form or a user chip -->
@@ -48,7 +53,7 @@
       the JSON protocol directly.</p>
     <div class="uploader">
       <input type="file" id="sub-file" accept=".py,.cpp,.cc,.cxx">
-      <button class="btn btn-primary" id="sub-upload">Submit bot</button>
+      <button class="btn btn-primary" id="sub-upload"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#tour-upload"/></svg>Submit bot</button>
       <span id="sub-result" class="sub-result"></span>
     </div>
     <div id="my-subs" class="subs-list"></div>

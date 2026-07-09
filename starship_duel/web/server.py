@@ -448,9 +448,12 @@ async def watch(ws: WebSocket, game_id: str):
         return
 
     play_task: Optional[asyncio.Task] = None
+    # Per-connection view perspective: None -> mode default (truth for bot-vs-bot),
+    # "truth", or a seat id "0"/"1" to watch through that ship's fog of war.
+    persp = {"value": None}
 
     async def send_state():
-        await ws.send_json(_view(s))
+        await ws.send_json(_view(s, persp["value"]))
 
     async def step_once() -> bool:
         """Advance one bot action off the event loop (a DeepSeek step may be
@@ -495,6 +498,9 @@ async def watch(ws: WebSocket, game_id: str):
                     play_task.cancel(); play_task = None
                 with s.lock:
                     s.reset()
+                await send_state()
+            elif cmd == "perspective":
+                persp["value"] = msg.get("value")  # "truth" | "0" | "1" | None
                 await send_state()
             elif cmd == "state":
                 await send_state()

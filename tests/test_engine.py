@@ -94,7 +94,8 @@ class TestActionBanking(unittest.TestCase):
 
 class TestCombat(unittest.TestCase):
     def test_fire_hit_wins(self):
-        e = fresh_engine()
+        # Classic assassination mode: a co-located FIRE is an instant win.
+        e = fresh_engine(enable_instakill=True)
         s = e.current_ship
         e.state.ships[1 - s].position = e.state.ships[s].position  # co-locate
         e.apply_action(Action.fire())
@@ -102,9 +103,294 @@ class TestCombat(unittest.TestCase):
         self.assertEqual(e.state.winner, s)
         self.assertEqual(e.state.end_reason, "fire_hit")
 
+    def test_fire_raid_steals_domination(self):
+        # Territory-control (default): FIRE transfers domination and does NOT end
+        # the game; a deep-cloaked rival is immune.
+        e = fresh_engine(fire_domination_steal=5)
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[rival].position = e.state.ships[s].position  # co-locate
+        e.state.ships[s].energy = e.config.cost_fire  # raiding now costs energy
+        e.state.domination[rival] = 8
+        e.state.domination[s] = 3
+        e.apply_action(Action.fire())
+        self.assertFalse(e.state.done)                 # raid never ends the game
+        self.assertEqual(e.state.domination[rival], 3)  # 8 - 5
+        self.assertEqual(e.state.domination[s], 8)      # 3 + 5
+        self.assertEqual(e.state.ships[s].energy, 0)    # cost_fire was spent
+        # A deep-cloaked rival can't be raided.
+        e2 = fresh_engine(fire_domination_steal=5)
+        s2 = e2.current_ship
+        e2.state.ships[1 - s2].position = e2.state.ships[s2].position
+        e2.state.ships[1 - s2].deep_cloak_turns_left = 2
+        e2.state.ships[s2].energy = e2.config.cost_fire
+        e2.state.domination[1 - s2] = 8
+        e2.apply_action(Action.fire())
+        self.assertEqual(e2.state.domination[1 - s2], 8)  # untouched
+
+    def test_deep_cloaked_claim_is_invisible_to_rival(self):
+        # Lever A: a deep-cloaked CLAIM flips true ownership but stays hidden in
+        # the rival's fogged view until it patrols there; an uncloaked claim is
+        # seen immediately.
+        e = fresh_engine()
+        s = e.current_ship
+        rival = 1 - s
+        # Put the rival somewhere, and the claimer on a system the rival can't see
+        # (not the rival's own system and not adjacent to it).
+        r_pos = e.state.ships[rival].position
+        blind = [x for x in e.map.systems
+                 if x != r_pos and x not in set(e.map.neighbors(r_pos))]
+        target = blind[0]
+        e.state.ships[s].position = target
+        e.state.ships[s].deep_cloak_turns_left = 2  # cloaked
+
+        e.apply_action(Action.claim())
+        self.assertEqual(e.state.system_owner[target], s)          # true owner flipped
+        rival_view = build_observation(e, rival).system_owner
+        self.assertIsNone(rival_view[target])                       # ...but rival can't see it
+        self.assertEqual(build_observation(e, s).system_owner[target], s)  # claimer knows
+
+        # An uncloaked claim on a fresh engine is visible to the rival at once.
+        e2 = fresh_engine()
+        s2 = e2.current_ship
+        r2 = 1 - s2
+        r2_pos = e2.state.ships[r2].position
+        blind2 = [x for x in e2.map.systems
+                  if x != r2_pos and x not in set(e2.map.neighbors(r2_pos))]
+        tgt2 = blind2[0]
+        e2.state.ships[s2].position = tgt2
+        e2.apply_action(Action.claim())                            # not cloaked
+        self.assertEqual(build_observation(e2, r2).system_owner[tgt2], s2)
+
+    def test_info_war_kit(self):
+        # #3: LRS = 2-hop vision; SCAN un-fogs ownership around the rival; JAMMING
+        # hides the jammer's territory from enemy scans.
+        e = fresh_engine()
+        s = e.current_ship
+        rival = 1 - s
+        p = e.state.ships[s].position
+        one_hop = set(e.map.neighbors(p))
+        two_hop = {q for n in one_hop for q in e.map.neighbors(n)} - one_hop - {p}
+        self.assertTrue(two_hop, "need a 2-hop system for the test")
+        far = next(iter(two_hop))
+        e.state.system_owner[far] = rival            # rival secretly owns a far system
+
+        # Without LRS the far system is out of sight.
+        e._observe_local(s)
+        self.assertNotIn(far, e.owner_known[s])
+        # With LRS the second ring is sensed.
+        e.state.ships[s].unlocked["long_range_scanners"] = True
+        e._observe_local(s)
+        self.assertIn(far, e.owner_known[s])
+        self.assertEqual(e.state.system_owner[far], rival)
+
+        # A rival-owned system next to the rival but OUT of the scanner's own
+        # sight -- so only a SCAN could reveal it.
+        def blind_rival_neighbor(eng, scanner, rid):
+            rpos = eng.state.ships[rid].position
+            vis = {eng.state.ships[scanner].position} | set(
+                eng.map.neighbors(eng.state.ships[scanner].position))
+            for q in eng.map.neighbors(rpos):
+                if q not in vis:
+                    return q
+            return None
+
+        # SCAN maps ownership around the rival's position.
+        e2 = fresh_engine()
+        s2 = e2.current_ship
+        r2 = 1 - s2
+        neigh = blind_rival_neighbor(e2, s2, r2)
+        self.assertIsNotNone(neigh)
+        e2.state.system_owner[neigh] = r2
+        self.assertNotIn(neigh, e2.owner_known[s2])    # unseen before the scan
+        e2.apply_action(Action.scan())
+        self.assertIn(neigh, e2.owner_known[s2])        # scan revealed it
+        self.assertEqual(build_observation(e2, s2).system_owner[neigh], r2)
+
+        # JAMMING hides the jammer's own systems from the scan.
+        e3 = fresh_engine()
+        s3 = e3.current_ship
+        r3 = 1 - s3
+        neigh3 = blind_rival_neighbor(e3, s3, r3)
+        self.assertIsNotNone(neigh3)
+        e3.state.system_owner[neigh3] = r3
+        e3.state.ships[r3].unlocked["jamming"] = True
+        e3.apply_action(Action.scan())
+        self.assertNotIn(neigh3, e3.owner_known[s3])   # jammed territory stays fogged
+
+    def test_komi_gives_second_mover_a_head_start(self):
+        e = fresh_engine()  # reference map, first_ship=0 -> second mover is seat 1
+        self.assertEqual(e.state.domination[1], REFERENCE_MAP.komi_domination)
+        self.assertEqual(e.state.domination[0], 0)
+
+    def test_capture_on_raid_flips_the_system(self):
+        e = fresh_engine(fire_domination_steal=5)
+        s = e.current_ship
+        rival = 1 - s
+        pos = e.state.ships[s].position
+        e.state.ships[rival].position = pos          # co-locate
+        e.state.system_owner[pos] = rival            # rival holds the ground
+        e.state.ships[s].energy = e.config.cost_fire
+        e.state.domination[rival] = 8
+        e.apply_action(Action.fire())
+        self.assertEqual(e.state.system_owner[pos], s)   # captured on the raid
+
+    def _prox_setup(self, **cfg):
+        """Engine with the defender holding proximity alert and the mover parked
+        one hop from a system adjacent to the defender's ship."""
+        e = fresh_engine(**cfg)
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[rival].unlocked["proximity_alert"] = True
+        rpos = e.state.ships[rival].position
+        n = next(iter(e.map.neighbors(rpos)))               # adjacent to defender
+        approach = next(x for x in e.map.neighbors(n) if x != rpos)
+        e.state.ships[s].position = approach
+        e.state.ships[s].cloaked = True
+        return e, s, rival, n
+
+    def test_proximity_alert_pierces_cloak_but_jamming_blinds_it(self):
+        # RPS: PROX beats DEEP_CLOAK (short-range alarm), JAMMING beats PROX.
+        # Plain cloaked intruder -> detected.
+        e, s, rival, n = self._prox_setup()
+        e.apply_action(Action.jump(n))
+        self.assertEqual(build_observation(e, rival).rival_position, n)
+
+        # Deep-cloaked intruder -> STILL detected (the alarm pierces cloak).
+        e2, s2, r2, n2 = self._prox_setup()
+        e2.state.ships[s2].deep_cloak_turns_left = 2
+        e2.apply_action(Action.jump(n2))
+        self.assertEqual(build_observation(e2, r2).rival_position, n2)
+
+        # Intruder running JAMMING -> undetected (electronic warfare blinds it).
+        e3, s3, r3, n3 = self._prox_setup()
+        e3.state.ships[s3].deep_cloak_turns_left = 2
+        e3.state.ships[s3].unlocked["jamming"] = True
+        e3.apply_action(Action.jump(n3))
+        self.assertIsNone(build_observation(e3, r3).rival_position)
+
+    def test_lrs_passively_tracks_rival_in_range(self):
+        e = fresh_engine()
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[s].unlocked["long_range_scanners"] = True
+        within = e._systems_within(e.state.ships[s].position, e.config.lrs_range)
+        target = next(x for x in within if x != e.state.ships[s].position)
+        e.state.ships[rival].position = target
+        e.state.ships[rival].cloaked = True
+        e.belief[s].unpin()                                  # belief goes fuzzy...
+        e._start_turn(s)
+        self.assertEqual(build_observation(e, s).rival_position, target)  # ...LRS re-pins it
+
+    def test_lrs_enables_ranged_raid(self):
+        e = fresh_engine(fire_domination_steal=5)
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[s].unlocked["long_range_scanners"] = True
+        e.state.ships[s].energy = e.config.cost_fire
+        n = next(iter(e.map.neighbors(e.state.ships[s].position)))  # adjacent, not co-located
+        e.state.ships[rival].position = n
+        e.state.system_owner[n] = rival
+        e.state.domination[rival] = 8
+        e.apply_action(Action.fire())
+        self.assertEqual(e.state.system_owner[n], s)     # sniped and captured at range
+        self.assertEqual(e.state.domination[s], 5)
+
+    def test_proximity_alert_shields_territory_but_jamming_punches_through(self):
+        # PROX blocks the capture (points still stolen); a JAMMING raider ignores it.
+        e = fresh_engine(fire_domination_steal=5)
+        s = e.current_ship
+        rival = 1 - s
+        pos = e.state.ships[s].position
+        e.state.ships[rival].position = pos
+        e.state.system_owner[pos] = rival
+        e.state.ships[rival].unlocked["proximity_alert"] = True
+        e.state.ships[s].energy = e.config.cost_fire
+        e.state.domination[rival] = 8
+        e.apply_action(Action.fire())
+        self.assertEqual(e.state.system_owner[pos], rival)   # shield held the ground
+        self.assertEqual(e.state.domination[s], 5)           # points still raided
+
+        e2 = fresh_engine(fire_domination_steal=5)
+        s2 = e2.current_ship
+        r2 = 1 - s2
+        p2 = e2.state.ships[s2].position
+        e2.state.ships[r2].position = p2
+        e2.state.system_owner[p2] = r2
+        e2.state.ships[r2].unlocked["proximity_alert"] = True
+        e2.state.ships[s2].unlocked["jamming"] = True
+        e2.state.ships[s2].energy = e2.config.cost_fire
+        e2.state.domination[r2] = 8
+        e2.apply_action(Action.fire())
+        self.assertEqual(e2.state.system_owner[p2], s2)      # jammed through the shield
+
+    def test_scan_recon_sweeps_whole_map_even_vs_deep_cloak(self):
+        e = fresh_engine()
+        s = e.current_ship
+        rival = 1 - s
+        near = e._systems_within(e.state.ships[s].position, 1)
+        far = next(x for x in e.map.systems if x not in near)
+        e.state.system_owner[far] = rival
+        e.state.ships[rival].deep_cloak_turns_left = 2     # deep-cloaked
+        e.apply_action(Action.scan())
+        self.assertIn(far, e.owner_known[s])                # ownership still swept
+        self.assertEqual(build_observation(e, s).system_owner[far], rival)
+
+    def test_jamming_makes_claims_permanently_silent(self):
+        e = fresh_engine()
+        s = e.current_ship
+        rival = 1 - s
+        rpos = e.state.ships[rival].position
+        blind = [x for x in e.map.systems
+                 if x != rpos and x not in set(e.map.neighbors(rpos))]
+        target = blind[0]
+        e.state.ships[s].position = target
+        e.state.ships[s].unlocked["jamming"] = True
+        e.state.ships[s].cloaked = False                    # uncloaked, yet silent
+        e.apply_action(Action.claim())
+        self.assertEqual(e.state.system_owner[target], s)   # really taken
+        self.assertNotIn(target, e.owner_known[rival])      # rival never learns of it
+
+    def test_fire_costs_a_life_and_respawns_the_victim(self):
+        e = fresh_engine(fire_domination_steal=5)
+        s = e.current_ship
+        rival = 1 - s
+        pos = e.state.ships[s].position
+        e.state.ships[rival].position = pos              # co-located
+        e.state.ships[s].energy = e.config.cost_fire
+        e.state.domination[rival] = 8
+        e.apply_action(Action.fire())
+        self.assertFalse(e.state.done)                   # 2 lives left -> game continues
+        self.assertEqual(e.state.lives[rival], 2)
+        self.assertNotEqual(e.state.ships[rival].position, pos)   # respawned away, hidden
+        self.assertTrue(e.state.ships[rival].cloaked)
+
+    def test_running_rival_out_of_lives_eliminates(self):
+        e = fresh_engine(lives=1)
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[rival].position = e.state.ships[s].position
+        e.state.ships[s].energy = e.config.cost_fire
+        e.apply_action(Action.fire())
+        self.assertTrue(e.state.done)
+        self.assertEqual(e.state.winner, s)
+        self.assertEqual(e.state.end_reason, "eliminated")
+
+    def test_deep_cloak_protects_lives(self):
+        e = fresh_engine()
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[rival].position = e.state.ships[s].position
+        e.state.ships[rival].deep_cloak_turns_left = 2   # immune to the hit
+        e.state.ships[s].energy = e.config.cost_fire
+        e.apply_action(Action.fire())
+        self.assertEqual(e.state.lives[rival], 3)        # life untouched
+        self.assertFalse(e.state.done)
+
     def test_fire_miss_is_not_terminal(self):
         e = fresh_engine()
         s = e.current_ship
+        e.state.ships[s].energy = e.config.cost_fire  # afford the shot
         # ensure not co-located
         others = [x for x in e.map.systems if x != e.state.ships[s].position]
         e.state.ships[1 - s].position = others[0]
@@ -350,7 +636,10 @@ class TestDomination(unittest.TestCase):
         self.assertEqual(e._controlled_income(s), 0)  # a dead star pays nothing
 
     def test_domination_wins_on_points(self):
-        e = fresh_engine(domination_target=8)  # two scored turns owning a binary
+        # Isolate the points mechanic: neutralize the per-map komi head-start
+        # (which would otherwise hand the second mover the low test target).
+        e = fresh_engine(domination_target=8)
+        e.state.domination = [0, 0]
         s = 0  # fresh_engine starts ship 0
         b = next(iter(e.state.binary_systems))
         e.state.system_owner[b] = s

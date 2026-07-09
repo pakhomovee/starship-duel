@@ -39,8 +39,10 @@ MAX_SYSTEMS = 32
 
 _STATUS_IDX = {"STABLE": 0, "DESTABILIZING": 1, "SUPERNOVA": 2}
 
-# Per-node feature width (see encode()).
-NODE_DIM = 22
+# Per-node feature width (see encode()).  Col 22 is a fog bit: 1 when this
+# observer has never sensed the system's owner (unknown != proven-unowned), so
+# the policy can tell where it is blind and value scouting.
+NODE_DIM = 23
 
 
 @dataclass
@@ -94,6 +96,7 @@ class GraphObsEncoder:
             + 1    # rival income rate
             + 1    # my Deep-Cloak turns left (immunity window)
             + 1    # fraction of the field still alive (collapse macro-signal)
+            + 2    # my lives, rival lives (the hunt dimension)
         )
 
     # Config-independent income weight of a system to its owner: binaries pay the
@@ -130,15 +133,20 @@ class GraphObsEncoder:
             reach = obs.rival_moves_since_seen
             candidates = {s for s, d in dist_seen.items() if d <= reach}
 
+        owner_known = obs.owner_known  # None => no fog (every system known)
         for s, i in self._idx.items():
             b = nf[i]
-            owner = obs.system_owner.get(s)
-            if owner is None:
-                b[0] = 1.0
-            elif owner == obs.ship_id:
-                b[1] = 1.0
+            known = owner_known is None or s in owner_known
+            if not known:
+                b[22] = 1.0  # fogged: owner unknown, leave the owner one-hot blank
             else:
-                b[2] = 1.0
+                owner = obs.system_owner.get(s)
+                if owner is None:
+                    b[0] = 1.0
+                elif owner == obs.ship_id:
+                    b[1] = 1.0
+                else:
+                    b[2] = 1.0
             b[3 + _STATUS_IDX.get(obs.system_status.get(s, "STABLE"), 0)] = 1.0
             b[6] = 1.0 if s in binaries else 0.0
             cache = obs.system_cache.get(s)
@@ -226,4 +234,8 @@ class GraphObsEncoder:
         alive = sum(1 for s in self.systems
                     if obs.system_status.get(s, "STABLE") != "SUPERNOVA")
         g[i] = alive / float(self.n); i += 1
+
+        # The hunt: lives remaining (normalised to a nominal 3-life cap).
+        g[i] = min(obs.lives / 3.0, 1.0); i += 1
+        g[i] = min(obs.rival_lives / 3.0, 1.0); i += 1
         return g

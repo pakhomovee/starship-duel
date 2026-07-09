@@ -186,6 +186,10 @@ class GameState:
     # Map-control score per ship, banked at the start of each of their turns.
     domination: List[int] = field(default_factory=lambda: [0, 0])
 
+    # Lives remaining per ship (the hunt / kill dimension).  A ship reduced to 0
+    # lives is eliminated.  Initialised to ``GameConfig.lives`` in ``Engine.reset``.
+    lives: List[int] = field(default_factory=lambda: [3, 3])
+
     # Terminal bookkeeping (None while the skirmish is live).
     winner: Optional[ShipId] = None
     done: bool = False

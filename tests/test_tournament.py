@@ -79,7 +79,9 @@ def test_run_match_records_result_and_replay(store, game_store):
     m = store.claim_match("w0")
     result = run_match(m, tstore=store, registry=BotRegistry(), game_store=game_store)
 
-    assert result in (0, 1)                    # collapse guarantees a decisive game
+    # Territory-control mode has no instant-kills, so a game can also end in a
+    # draw (equal domination at timeout); any of the three is a valid result.
+    assert result in (0, 1, None)
     row = store.list_matches()[0]
     assert row["status"] == "done"
     assert row["end_reason"]

@@ -15,6 +15,7 @@ from .belief import BotBelief
 from .deepseek_bot import DeepSeekBot
 from .heuristic_bot import HeuristicBot
 from .human import HumanBot, render_observation
+from .hunter_bot import HunterBot
 from .random_bot import RandomBot
 
 #: A factory takes an optional ``seed`` and returns a fresh :class:`Bot`.
@@ -24,9 +25,16 @@ BotFactory = Callable[..., Bot]
 #: The checkpoints ship in ``bots/ppo/``; the factory is lazy so importing this
 #: package never pulls in torch/numpy unless a PPO bot is actually built.
 _PPO_DIR = Path(__file__).resolve().parent / "ppo"
+# Legacy single-map (flat-encoder) tiers -- trained on the pre-rebalance game;
+# kept only for backwards compatibility.  Prefer the map-universal ``uppo`` tiers.
 _PPO_TIERS = {
     "ppo-easy": "ckpt_500.pt",
     "ppo-medium": "ckpt_2000.pt",
+}
+# Map-universal (GNN) tiers -- current game, play any map.
+_UPPO_TIERS = {
+    "uppo-easy": "uppo-easy.pt",
+    "uppo": "uppo.pt",
 }
 
 
@@ -37,9 +45,17 @@ def _make_ppo(ckpt: str, display: str) -> BotFactory:
     return factory
 
 
+def _make_uppo(ckpt: str, display: str) -> BotFactory:
+    def factory(seed=None) -> Bot:
+        from .ppo_bot import UniversalPpoBot
+        return UniversalPpoBot.from_checkpoint(str(_PPO_DIR / ckpt), name=display, seed=seed)
+    return factory
+
+
 REGISTRY: Dict[str, BotFactory] = {
     "random": lambda seed=None: RandomBot(seed=seed),
     "heuristic": lambda seed=None: HeuristicBot(seed=seed),
+    "hunter": lambda seed=None: HunterBot(seed=seed),
     "deepseek": lambda seed=None: DeepSeekBot(seed=seed),
     "human": lambda seed=None: HumanBot(),
 }
@@ -48,6 +64,9 @@ REGISTRY: Dict[str, BotFactory] = {
 for _tier, _ckpt in _PPO_TIERS.items():
     if (_PPO_DIR / _ckpt).exists():
         REGISTRY[_tier] = _make_ppo(_ckpt, _tier)
+for _tier, _ckpt in _UPPO_TIERS.items():
+    if (_PPO_DIR / _ckpt).exists():
+        REGISTRY[_tier] = _make_uppo(_ckpt, _tier)
 
 
 def register(name: str, factory: BotFactory) -> None:
@@ -65,6 +84,7 @@ __all__ = [
     "BotBelief",
     "RandomBot",
     "HeuristicBot",
+    "HunterBot",
     "DeepSeekBot",
     "HumanBot",
     "render_observation",

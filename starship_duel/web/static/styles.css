@@ -72,6 +72,9 @@ select, input {
 .chip-turn { color: var(--ink); background: var(--gold); border: none; font-weight: 800; }
 .watch-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .watch-controls .speed { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.persp-seg { display: inline-flex; background: #ffffff10; border-radius: 8px; padding: 2px; gap: 2px; }
+.persp-seg .seg-btn { font: 700 11px 'Nunito'; color: var(--muted); background: none; border: 0; padding: 4px 9px; border-radius: 6px; cursor: pointer; }
+.persp-seg .seg-btn.is-on { background: var(--violet, #8b7bff); color: #fff; }
 
 #board {
   width: 100%; height: auto; aspect-ratio: 1000 / 780;
@@ -124,10 +127,18 @@ select, input {
 .stat b { color: var(--text); }
 .stat .ic { width: 14px; height: 14px; vertical-align: -2px; margin-right: 2px; }
 .dom { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-.dom-label { font: 800 8.5px 'Nunito'; letter-spacing: 1px; color: var(--muted); flex: 0 0 auto; }
+.dom-label { display: inline-flex; align-items: center; gap: 3px; font: 800 8.5px 'Nunito'; letter-spacing: 1px; color: var(--muted); flex: 0 0 auto; }
+.dom-label .ic-dom { width: 12px; height: 12px; }
+/* Fog of war: a system whose ownership this player hasn't scouted. The star type
+   is still public, so we haze + desaturate the whole node (reads as "unexplored")
+   rather than hide it, and the ring-fogged sprite marks the unknown owner. */
+.sys-node.fogged { opacity: 0.4; filter: grayscale(0.55) brightness(0.8); }
+.sys-node.fogged .sys-label { opacity: 0.7; }
 .dom-bar { flex: 1 1 auto; height: 7px; border-radius: 6px; background: #ffffff14; overflow: hidden; }
 .dom-fill { height: 100%; border-radius: 6px; transition: width .25s ease; }
 .dom-num { font: 700 10px 'JetBrains Mono'; color: var(--violet-soft); flex: 0 0 auto; min-width: 42px; text-align: right; }
+.lives { display: flex; align-items: center; gap: 3px; margin-top: 5px; }
+.lives .ic-life { width: 15px; height: 15px; }
 .badges { display: flex; gap: 4px; margin-top: 4px; }
 .badge { font: 700 9px 'Nunito'; padding: 2px 6px; border-radius: 6px; background: #ffcf5c22; color: var(--gold); text-transform: uppercase; letter-spacing: .5px; }
 .pos-hidden { color: var(--violet); font-style: italic; }

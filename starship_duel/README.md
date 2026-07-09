@@ -20,7 +20,7 @@ starship_duel/
     belief.py       # per-observer "could be here" candidate-set tracker
     observation.py  # partial-info Observation built per ship (spec §3)
   env.py            # StarshipDuelEnv — PettingZoo-style AEC wrapper (stdlib)
-  bots/             # Bot interface + random / heuristic / deepseek / human + belief
+  bots/             # Bot interface + random / heuristic / hunter / deepseek / human + belief
   run.py            # match orchestration + CLI (name or 'cmd:<program>' bots)
   rl/               # ── RL adapters (numpy/gymnasium/pettingzoo) ──
     action_coding.py  # flat Discrete action space <-> Action + legal mask
@@ -49,29 +49,38 @@ starship_duel/
 tests/                # test_engine.py, test_rl_web.py, test_arena.py, test_tournament.py
 ```
 
-## Winning: knockout or map control
+## Winning: domination, elimination, or collapse
 
-There are two ways to win a skirmish:
+There are **three** ways to win a skirmish (full rules in
+[`../starship_duel_env_spec.md`](../starship_duel_env_spec.md)):
 
-- **Knockout** — **Fire** on the system the rival is actually in (instant win).
-- **Map control (domination)** — at the start of each of your turns you bank
-  *control points* equal to your income from the systems you own (single `+1`,
-  binary `+4`; collapsed stars pay nothing). First to `domination_target` (50)
-  wins on points (`config.domination_enabled`, on by default).
+- **Domination** — at the start of each of your turns you bank *control points*
+  equal to your income from systems you own (single `+1`, binary `+4`; collapsed
+  stars pay nothing). First to `domination_target` (40) wins on points. Income
+  banks **both** Energy and points from the same stream.
+- **Elimination** — a landed **Fire** is a *raid*: it steals `10` domination,
+  **captures** the co-located system, and costs the rival **one life**, then
+  respawns it hidden. Run the rival out of `lives` (3) and you win by
+  `eliminated`. This is the **hunt**, and it makes the locate/stealth kit matter.
+- **Collapse** — outlast a rival caught on a dying star (see below).
 
-Map control is what makes the game *dynamic* rather than a staring contest: to
-score you must leave cover and **Claim** territory — which exposes you — then
-defend it and contest the rival's. That exposure is exactly what sets up
-knockouts, and it's why **Scan** (find the claimer), **Deep Cloak** (claim while
-immune to exposure), **Overcharge** (claim more per turn) and the unlocks all
-earn their keep. Both scores are public (`obs.domination`, `domination_target`)
-and shown as the **CONTROL** bars in the web UI. A turn-cap timeout is decided on
-the control race first, then most-systems, else a draw.
+Both scores and both ships' `lives` are public (`obs.domination`, `obs.lives`,
+`obs.rival_lives`). Different maps favour different paths — some are hunting
+grounds, some are territory races. A turn-cap timeout is a draw.
 
-The bundled **`heuristic`** bot plays this: it claims and steals binaries, hunts
-and pounces when it gets a fix, buys Deep Cloak to secure a contested claim, and
-— crucially — reads `system_collapse_in` to **evacuate a star before it goes
-supernova** instead of sitting on it.
+**Fog of war:** the ownership map is *per-observer* — you only see systems you've
+sensed (your neighbourhood, a Scan sweep, or an uncloaked rival claim), so a
+**deep-cloaked Claim expands invisibly**. **Komi:** the second mover gets a
+per-map starting handicap so each map is ~50/50 on turn order.
+
+The ability kit forms a rock-paper-scissors — **Deep Cloak** beats Scan/LRS,
+**Proximity Alert** beats Deep Cloak (short-range alarm that pierces cloak +
+shields your territory from capture), **Jamming** beats Proximity — and each also
+has standalone value (LRS = ranged raid, Scan = full-map recon, etc.).
+
+The bundled **`heuristic`** bot claims and steals binaries, hunts and pounces on a
+fix, buys Deep Cloak/LRS, and evacuates stars before they go supernova. The
+**`hunter`** bot leans all-in on the kill path: locate → close → fire → re-locate.
 
 ## The collapse (shrinking field)
 
@@ -369,8 +378,9 @@ Programmatically:
 from starship_duel.bots import make_bot
 from starship_duel.run import play_skirmish
 
-res = play_skirmish(make_bot("heuristic"), make_bot("random", seed=0), seed=0)
-# {'winner': 0, 'end_reason': 'fire_hit', 'turns': 3, ...}
+res = play_skirmish(make_bot("hunter"), make_bot("random", seed=0), seed=0)
+# {'winner': 0, 'end_reason': 'eliminated', 'turns': 11, ...}
+# end_reason is one of: 'domination' | 'eliminated' | 'collapse' | 'timeout'
 ```
 
 ## The three modes
@@ -410,9 +420,12 @@ register("mybot", lambda seed=None: MyBot(seed=seed))   # now usable via --bot0 
 
 Key `Observation` fields (see [`game/observation.py`](game/observation.py)):
 `position`, `cloaked`, `energy`, `banked_overcharge`, `actions_remaining`,
-`unlocked` (self-private); `system_owner`, `system_status`, `system_cache`,
-`adjacency`, `binary_systems`, `rival_unlocked`, `rival_last_action` (public);
-and the hidden-info signals: **`rival_position`** — the rival's *exact* system,
+`unlocked` (self-private); `domination` + `domination_target`, **`lives` +
+`rival_lives`**, `system_status`, `system_cache`, `adjacency`, `binary_systems`,
+`rival_unlocked`, `rival_last_action` (public); **`system_owner` is fogged** —
+only systems in **`owner_known`** are actually sensed, the rest are unknown (a
+deep-cloaked rival can be claiming territory you can't see). And the hidden-info
+signals: **`rival_position`** — the rival's *exact* system,
 given only when known for certain (else `None`); **`rival_last_seen`** — the last
 system it was confirmed in; **`rival_moves_since_seen`** — an upper bound on hops
 travelled since. Those last two are exactly enough to re-run the reachability BFS
@@ -471,7 +484,7 @@ a documented default (`game/config.py`):
 - **Cache economy** — the spec's pseudocode spawns a cache in *every* empty
   system every tick, which floods the map with energy and kills all scarcity.
   Instead caches are a small **contested pool**: at most `max_active_caches`
-  (default 3) exist at once, a new one appears every `cache_spawn_period` turns
+  (default 4) exist at once, a new one appears every `cache_spawn_period` turns
   at a random eligible system, and uncollected caches **escalate** in value
   (`cache_upgrade_period`, `cache_overcharge_transform_prob`) — turning them
   into juicy-but-exposing objectives worth fighting over. Binaries are excluded

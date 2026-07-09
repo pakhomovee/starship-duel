@@ -66,6 +66,7 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
             "status": st.system_status[name].value,
             "cache": None if cache is None else {"kind": cache.kind.value, "value": cache.value},
             "collapse_in": eng.collapse_in(name),  # plies to supernova (early warning)
+            "fogged": False,  # overridden per-observer below (fog of war)
         })
 
     edges = []
@@ -91,6 +92,8 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
         "campaign_score": list(st.campaign_score),
         "domination": list(st.domination),
         "domination_target": session.config.domination_target,
+        "lives": list(st.lives),
+        "lives_max": session.config.lives,
         "systems": systems,
         "edges": edges,
         "events": session.recent_events(),
@@ -118,6 +121,15 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
         rival = eng.state.ships[1 - me]
         rival_known = not rival.cloaked
         view["self_id"] = me
+        # Fog of war: this observer only sees ownership it has actually sensed;
+        # unknown systems are shown fogged (rival claims under cloak stay hidden).
+        known = eng.owner_known[me]
+        for sysd in systems:
+            if sysd["name"] in known:
+                sysd["owner"] = obs.system_owner.get(sysd["name"])
+            else:
+                sysd["owner"] = None
+                sysd["fogged"] = True
         view["ships"] = [
             {"id": me, "position": obs.position, "cloaked": obs.cloaked, "known": True, "is_self": True},
             {"id": 1 - me,

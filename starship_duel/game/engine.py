@@ -44,6 +44,17 @@ class Engine:
         self.state: GameState = None  # type: ignore[assignment]
         # belief[o] = observer ``o``'s belief about the rival other(o).
         self.belief: List[BeliefTracker] = []
+        # observed_owner[o] = ownership map as *observer o knows it*.  A ship only
+        # learns a system's owner by sensing it locally (its own system + the
+        # neighbours it can see) or by witnessing an uncloaked rival claim.  This
+        # is what makes a deep-cloaked CLAIM *invisible expansion*: the true owner
+        # flips in st.system_owner (game logic), but the rival's observed map does
+        # not, so it must scout/patrol to discover territory taken under cloak.
+        self.observed_owner: List[Dict[System, Optional[ShipId]]] = []
+        # owner_known[o] = systems whose owner o has actually sensed at least once.
+        # Lets the observation distinguish "known to be unowned" from "never seen"
+        # (fog), which the policy needs in order to value scouting.
+        self.owner_known: List[Set[System]] = []
 
     # ------------------------------------------------------------------ setup
     def reset(
@@ -61,6 +72,16 @@ class Engine:
         ships = [ShipState(position=p0), ShipState(position=p1)]
         first = self.rng.randint(0, 1) if first_ship is None else first_ship
 
+        # Komi: hand the SECOND mover a starting handicap to offset the compounding
+        # first-mover tempo edge of a claim race.  A map may override the global
+        # default so each map can be balanced to ~50% independently.
+        second = other(first)
+        komi_energy = (gmap.komi_energy if gmap.komi_energy is not None
+                       else self.config.komi_energy)
+        self._komi_domination = (gmap.komi_domination if gmap.komi_domination is not None
+                                 else self.config.komi_domination)
+        ships[second].energy += komi_energy
+
         self.state = GameState(
             skirmish_number=skirmish_number,
             campaign_score=list(campaign_score or [0, 0]),
@@ -74,6 +95,8 @@ class Engine:
             turn_clock=self.config.turn_clock_start,
             ships=ships,
         )
+        self.state.domination[second] += self._komi_domination
+        self.state.lives = [self.config.lives, self.config.lives]
 
         # Per-observer "last confirmed sighting" of the rival: the system it was
         # last seen in, and how many of its turns have passed since.  Surfaced in
@@ -95,6 +118,13 @@ class Engine:
                 self._see(o, rival_pos)  # a hard reveal (pinned) at spawn
             else:
                 self.belief[o].reset(self._spawn_consistent_set(ships[o].position))
+
+        # Fog on ownership: start each observer's map blank (nothing owned yet),
+        # then let each ship sense its own neighbourhood.
+        self.observed_owner = [{s: None for s in gmap.systems} for _ in range(2)]
+        self.owner_known = [set(), set()]
+        for o in (0, 1):
+            self._observe_local(o)
 
         self._start_turn(first)
         return self.state
@@ -192,11 +222,13 @@ class Engine:
         if owner[pos] != s and not pos_supernova:
             actions.append(Action.claim())
 
-        # FIRE: always available.
-        actions.append(Action.fire())
+        # FIRE: free in assassination mode; in territory-control it costs energy
+        # (a raid is a committed strike, not a free probe).
+        e = ship_state.energy
+        if cfg.enable_instakill or e >= cfg.cost_fire:
+            actions.append(Action.fire())
 
         # Energy operations.
-        e = ship_state.energy
         if e >= cfg.cost_scan:
             actions.append(Action.scan())
         if e >= cfg.cost_deep_cloak:
@@ -291,6 +323,10 @@ class Engine:
         ship.position = dest
         events.append(f"ship{s} jumps to {dest}")
 
+        # Moving into a new neighbourhood lifts the fog there (may reveal that the
+        # rival has been claiming systems under cloak).
+        self._observe_local(s)
+
         entered_rival_claimed = st.system_owner[dest] == rival_id
         entered_rival_system = dest == rival.position
 
@@ -314,6 +350,20 @@ class Engine:
         else:
             self._see(rival_id, ship.position)  # still exposed -> tracked exactly
 
+        # PROXIMITY_ALERT (defender's short-range alarm around its ship): moving
+        # adjacent to the defender trips it and reveals the raider's location.
+        # Runs *after* the belief update so the pin is the final word.  Crucially
+        # it *pierces deep cloak* -- you can hide your identity at range but not
+        # your hull at the doorstep -- so it is the hard counter to a cloak-raid.
+        # The mover's JAMMING blinds the alarm (electronic warfare): the RPS chain
+        # is cloak beats SCAN/LRS, PROX beats cloak, JAMMING beats PROX.
+        if (rival.unlocked["proximity_alert"] and not ship.unlocked["jamming"]
+                and dest in self._systems_within(rival.position, 1)):
+            self._see(rival_id, ship.position)   # defender learns where the raider is
+            if not ship.deep_cloak_active:
+                ship.cloaked = False
+            events.append(f"ship{s} trips ship{rival_id}'s proximity alert at {dest}")
+
     def _do_hold(self, s: ShipId, action: Action, events: List[str]) -> None:
         ship = self.state.ships[s]
         was_exposed = not ship.cloaked
@@ -329,18 +379,76 @@ class Engine:
     def _do_claim(self, s: ShipId, action: Action, events: List[str]) -> None:
         st = self.state
         ship = st.ships[s]
-        st.system_owner[ship.position] = s
-        events.append(f"ship{s} claims {ship.position}")
+        pos = ship.position
+        st.system_owner[pos] = s
+        events.append(f"ship{s} claims {pos}")
+        # The claimer always knows what it took.
+        self.observed_owner[s][pos] = s
+        self.owner_known[s].add(pos)
+        # A cloaked claim is silent: the rival's ownership map is NOT updated, so
+        # the territory changes hands invisibly.  JAMMING makes *every* claim
+        # silent (permanent invisible expansion), even uncloaked; otherwise an
+        # uncloaked claim exposes the ship and the rival learns the new owner.
+        if not ship.deep_cloak_active and not ship.unlocked["jamming"]:
+            self.observed_owner[other(s)][pos] = s
+            self.owner_known[other(s)].add(pos)
         self._expose(s, events, reason="claim")
 
     def _do_fire(self, s: ShipId, action: Action, events: List[str]) -> None:
         st = self.state
+        cfg = self.config
         ship = st.ships[s]
         rival_id = other(s)
         rival = st.ships[rival_id]
-        if ship.position == rival.position:
-            events.append(f"ship{s} FIRES and hits at {ship.position}")
-            self._win(s, "fire_hit", events)
+        hit = ship.position == rival.position
+
+        if cfg.enable_instakill:
+            # Classic assassination: a confirmed co-located hit wins outright.
+            if hit:
+                events.append(f"ship{s} FIRES and hits at {ship.position}")
+                self._win(s, "fire_hit", events)
+            else:
+                events.append(f"ship{s} fires and misses")
+                if rival.unlocked["proximity_alert"]:
+                    self._expose(s, events, reason="failed fire vs proximity alert")
+            return
+
+        # Territory-control: FIRE raids domination instead of killing.  The shot
+        # costs energy whether it lands or not, so blind spraying self-punishes
+        # and a raid is only worth it when it will actually stick.  A deep-cloaked
+        # rival is undetectable and can't be raided.
+        ship.energy -= cfg.cost_fire
+        # Range: co-located always; one hop away too with Long-Range Scanners
+        # (a standing "sniper" upgrade -- raid without perfect co-location).
+        co_located = ship.position == rival.position
+        in_range = (ship.unlocked["long_range_scanners"]
+                    and rival.position in self.map.neighbors(ship.position))
+        if (co_located or in_range) and not rival.deep_cloak_active:
+            taken = min(cfg.fire_domination_steal, st.domination[rival_id])
+            st.domination[rival_id] -= taken
+            st.domination[s] += taken
+            tgt = rival.position
+            verb = "RAIDS" if co_located else "SNIPES"
+            events.append(f"ship{s} {verb} at {tgt}, steals {taken} domination")
+            # Capture the ground under the rival -- unless the defender's
+            # PROXIMITY_ALERT shields its territory (and the raider isn't JAMMING).
+            shielded = rival.unlocked["proximity_alert"] and not ship.unlocked["jamming"]
+            if cfg.fire_captures_system and st.system_owner[tgt] == rival_id:
+                if shielded:
+                    events.append(f"ship{rival_id}'s proximity shield holds {tgt}")
+                else:
+                    st.system_owner[tgt] = s
+                    self.observed_owner[s][tgt] = s
+                    self.owner_known[s].add(tgt)
+                    events.append(f"ship{s} captures {tgt}")
+            self._expose(s, events, reason="raid")  # firing reveals the raider
+            # The hunt: a landed hit also costs a life (and respawns the victim).
+            if cfg.lives_enabled:
+                self._lose_life(rival_id, s, events)
+            if not st.done and cfg.domination_enabled and st.domination[s] >= cfg.domination_target:
+                self._win(s, "domination", events)
+        elif co_located or in_range:
+            events.append(f"ship{s} fires: rival deep-cloaked, no effect")
         else:
             events.append(f"ship{s} fires and misses")
             if rival.unlocked["proximity_alert"]:
@@ -352,11 +460,24 @@ class Engine:
         rival_id = other(s)
         rival = st.ships[rival_id]
         ship.energy -= self.config.cost_scan
+        # Recon ping (unconditional): a scan sweeps the whole map's ownership, so
+        # it always tells you where the rival has been expanding under fog -- even
+        # if the rival itself is deep-cloaked.  Systems the rival owns while it
+        # runs JAMMING stay hidden (its electronic warfare masks its territory).
+        rival_jams = rival.unlocked["jamming"]
+        seen = self.observed_owner[s]
+        known = self.owner_known[s]
+        for sysname, owner in self.state.system_owner.items():
+            if rival_jams and owner == rival_id:
+                continue
+            seen[sysname] = owner
+            known.add(sysname)
+        # ...and it also fixes the rival's exact position, unless it is deep-cloaked.
         if not rival.deep_cloak_active:
-            self._see(s, rival.position)  # scanner learns exact system
+            self._see(s, rival.position)
             events.append(f"ship{s} scans: rival at {rival.position}")
         else:
-            events.append(f"ship{s} scans: rival deep-cloaked, no reading")
+            events.append(f"ship{s} scans: map swept, rival deep-cloaked (no fix)")
 
     def _do_deep_cloak(self, s: ShipId, action: Action, events: List[str]) -> None:
         ship = self.state.ships[s]
@@ -408,6 +529,35 @@ class Engine:
         self._see(observer, rival.position)
         events.append(f"ship{observer} detects rival at {rival.position} ({reason})")
 
+    def _systems_within(self, pos: System, k: int) -> Set[System]:
+        """Systems within ``k`` hops of ``pos`` (including ``pos``)."""
+        seen = {pos}
+        frontier = {pos}
+        for _ in range(k):
+            nxt = set()
+            for n in frontier:
+                nxt |= set(self.map.neighbors(n))
+            nxt -= seen
+            seen |= nxt
+            frontier = nxt
+        return seen
+
+    def _observe_local(self, o: ShipId) -> None:
+        """Observer ``o`` senses the true owner of the systems it can see: its own
+        system and adjacent ones, or out to **two hops** with Long-Range Scanners.
+        The fog lifts only where the ship can see."""
+        st = self.state
+        pos = st.ships[o].position
+        vis = {pos} | set(self.map.neighbors(pos))
+        if st.ships[o].unlocked["long_range_scanners"]:
+            for nb in list(vis):
+                vis |= set(self.map.neighbors(nb))  # second ring
+        seen = self.observed_owner[o]
+        known = self.owner_known[o]
+        for sysname in vis:
+            seen[sysname] = st.system_owner[sysname]
+            known.add(sysname)
+
     # ----------------------------------------------------------- turn lifecycle
     def _start_turn(self, s: ShipId, events: Optional[List[str]] = None) -> None:
         st = self.state
@@ -421,6 +571,17 @@ class Engine:
         self._advance_system_status()
         if self._check_collapse_deaths(events):
             return
+
+        # Refresh what this ship can see of the ownership map from where it sits.
+        self._observe_local(s)
+
+        # LONG_RANGE_SCANNERS (attacker's radar): passively track the rival's exact
+        # system while it is within range and not deep-cloaked -- lets you line up
+        # a capture-raid without spending a SCAN every turn.
+        rival = st.ships[other(s)]
+        if (ship.unlocked["long_range_scanners"] and not rival.deep_cloak_active
+                and rival.position in self._systems_within(ship.position, cfg.lrs_range)):
+            self._see(s, rival.position)
 
         # Income from owned (living) systems -- also the per-turn domination gain.
         income = self._controlled_income(s)
@@ -508,6 +669,29 @@ class Engine:
         st.end_reason = reason
         st.campaign_score[winner] += 1
         events.append(f"ship{winner} wins skirmish ({reason})")
+
+    def _lose_life(self, victim: ShipId, killer: ShipId, events: List[str]) -> None:
+        """``victim`` takes a hit: -1 life, then either elimination (``killer``
+        wins) or a respawn -- teleported hidden to a random safe system so the
+        hunter must re-locate it (the exact system is no longer known)."""
+        st = self.state
+        st.lives[victim] -= 1
+        events.append(f"ship{victim} is hit ({st.lives[victim]} lives left)")
+        if st.lives[victim] <= 0:
+            self._win(killer, "eliminated", events)
+            return
+        # Respawn: a safe living system away from the killer, re-cloaked.
+        safe = [s for s in self.map.systems
+                if st.system_status[s] is not SystemStatus.SUPERNOVA
+                and s != st.ships[killer].position]
+        vship = st.ships[victim]
+        vship.position = self.rng.choice(safe or self.map.systems)
+        vship.cloaked = True
+        vship.deep_cloak_turns_left = 0
+        # The killer loses the fix -- belief re-opens to the whole map.
+        self.belief[killer].reset(set(self.map.systems))
+        self._observe_local(victim)
+        events.append(f"ship{victim} respawns and vanishes")
 
     def _resolve_timeout(self, events: List[str]) -> None:
         st = self.state

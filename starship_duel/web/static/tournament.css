@@ -1,5 +1,15 @@
 /* Tournament page — builds on the shared tokens/classes in styles.css. */
 
+/* new-mechanic / branding icons */
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { flex: 0 0 auto; filter: drop-shadow(0 0 10px rgba(92,224,255,.4)); }
+.board-table .rank { display: flex; align-items: center; gap: 6px; }
+.rank-medal { flex: 0 0 auto; }
+.row-avatar { vertical-align: -5px; margin-right: 7px; opacity: .9; }
+.chip-user { flex: 0 0 auto; }
+.sub-lang { vertical-align: -4px; margin-right: 7px; flex: 0 0 auto; }
+.sub-ok { vertical-align: -4px; }
+
 .tourney {
   max-width: 1040px;
   margin: 0 auto;

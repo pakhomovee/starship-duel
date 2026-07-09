@@ -10,6 +10,24 @@ const el = (tag, cls, txt) => {
   if (txt != null) n.textContent = txt;
   return n;
 };
+const SVGNS = "http://www.w3.org/2000/svg";
+// An <svg><use href="#id"> element; the symbol carries its own viewBox, so we
+// only set width/height (mixed-size sprites all render correctly this way).
+function icon(id, cls, size = 18) {
+  const s = document.createElementNS(SVGNS, "svg");
+  s.setAttribute("width", size); s.setAttribute("height", size);
+  if (cls) s.setAttribute("class", cls);
+  const u = document.createElementNS(SVGNS, "use");
+  u.setAttribute("href", "#" + id);
+  s.appendChild(u);
+  return s;
+}
+async function loadSprites() {
+  try { $("#sprite-host").innerHTML = await (await fetch("/static/sprites.svg")).text(); }
+  catch (_) { /* icons degrade to empty; page still works */ }
+}
+const RANK_ICON = { 1: "tour-medal-gold", 2: "tour-medal-silver", 3: "tour-medal-bronze" };
+const LANG_ICON = (name) => /\.(cpp|cc|cxx|hpp)$/i.test(name || "") ? "lang-cpp" : "lang-python";
 
 // Preserve a ?token= host-gate (STARSHIP_ACCESS_TOKEN) across API calls.
 const ACCESS = new URLSearchParams(location.search).get("token");
@@ -33,6 +51,7 @@ function renderAuth() {
   box.innerHTML = "";
   if (State.me && State.me.authenticated) {
     const chip = el("span", "user-chip");
+    chip.append(icon("tour-user", "chip-user", 18));
     chip.append(el("b", null, State.me.username));
     if (State.me.is_admin) chip.append(el("span", "badge badge-admin", "admin"));
     box.append(chip);
@@ -98,11 +117,16 @@ function renderStandings(body, data) {
   const head = el("tr");
   ["#", "Competitor", "Score", "90% CI", "W–L", "Games"].forEach((h) => head.append(el("th", null, h)));
   table.append(head);
+  const BASES = ["random", "heuristic", "hunter", "uppo", "uppo-easy", "ppo-easy", "ppo-medium"];
   for (const r of data.rows) {
     const tr = el("tr");
-    const isBase = ["random", "heuristic", "ppo-easy", "ppo-medium"].includes(r.id);
-    tr.append(el("td", "rank", "#" + r.rank));
+    const isBase = BASES.includes(r.id);
+    const rank = el("td", "rank");
+    if (RANK_ICON[r.rank]) rank.append(icon(RANK_ICON[r.rank], "rank-medal", 24));
+    rank.append(el("span", null, "#" + r.rank));
+    tr.append(rank);
     const name = el("td");
+    name.append(icon("tour-bot", "row-avatar", 22));
     name.append(el("b", null, r.id));
     if (isBase) name.append(el("span", "badge", "baseline"));
     tr.append(name);
@@ -126,8 +150,10 @@ function renderSubs(container, subs, showUser) {
   if (!subs.length) { container.append(el("p", "hint", "No submissions yet.")); return; }
   for (const s of subs) {
     const row = el("div", "sub-row");
+    row.append(icon(LANG_ICON(s.filename || s.kind), "sub-lang", 20));
     if (showUser) row.append(el("b", "sub-user", s.username));
     row.append(el("span", "sub-when", new Date(s.created * 1000).toLocaleString()));
+    if (s.status === "validated") row.append(icon("tour-verified", "sub-ok", 18));
     row.append(statusBadge(s));
     if (s.message) row.append(el("span", "sub-msg", s.message));
     container.append(row);
@@ -238,6 +264,7 @@ function init() {
   $("#recompute-full").onclick = () =>
     adminPost("/api/tournament/recompute?scope=full", (r) => `recomputed final (${r.rows.length} ranked)`);
 
+  loadSprites();
   refreshMe();
   loadStandings();
   setInterval(loadStandings, 30000);  // gentle live refresh

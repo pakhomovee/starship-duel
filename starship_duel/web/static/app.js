@@ -94,6 +94,13 @@ async function boot() {
   $("#btn-step").onclick = () => wsSend({ cmd: "step" });
   $("#btn-play").onclick = () => { wsSend({ cmd: "play", delay: speed() }); setPlaying(true); };
   $("#btn-pause").onclick = () => { wsSend({ cmd: "pause" }); setPlaying(false); };
+  // Watch through a ship's fog of war (or the full "truth" board).
+  $("#persp-seg").addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg-btn");
+    if (!btn) return;
+    $("#persp-seg").querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("is-on", b === btn));
+    wsSend({ cmd: "perspective", value: btn.dataset.persp });
+  });
 
   await newGame();
 }
@@ -112,6 +119,16 @@ function wireRules() {
 }
 
 // ---- game lifecycle --------------------------------------------------------
+function syncPerspSeg(view) {
+  // Reflect the perspective the server is actually serving: truth for spectating
+  // two bots, or the human's own (fogged) seat when you're playing.
+  const seg = $("#persp-seg");
+  if (!seg || !view) return;
+  const want = view.perspective === "truth" || view.perspective == null
+    ? "truth" : String(view.perspective);
+  seg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("is-on", b.dataset.persp === want));
+}
+
 async function newGame() {
   exitReplay();
   closeWs();
@@ -122,6 +139,7 @@ async function newGame() {
   };
   const view = await postJSON("/api/game", body);
   onView(view);
+  syncPerspSeg(view);     // human game -> your (fogged) seat; bot-vs-bot -> truth
   openWs(view.game_id);   // WS drives Step/Auto in every mode
 }
 
@@ -229,14 +247,15 @@ function renderBoard(v) {
 
   // systems
   for (const s of v.systems) {
-    const g = el("g");
+    const g = el("g", { class: s.fogged ? "sys-node fogged" : "sys-node" });
     const status = s.status.toLowerCase();
     const kind = s.binary ? "binary" : "single";
     const ssz = sysSize(s);
-    const ring = s.owner === 0 ? "ring-owned-p1" : s.owner === 1 ? "ring-owned-p2" : "ring-neutral";
+    const ring = s.fogged ? "ring-fogged"
+      : s.owner === 0 ? "ring-owned-p1" : s.owner === 1 ? "ring-owned-p2" : "ring-neutral";
 
     if (candidate.has(s.name)) g.appendChild(centered("marker-candidate", s.x, s.y, ssz * 0.94, "candidate-halo"));
-    g.appendChild(centered(ring, s.x, s.y, ssz + 12));
+    g.appendChild(centered(ring, s.x, s.y, ssz + 12, s.fogged ? "fogged-node" : null));
     g.appendChild(centered(`sys-${kind}-${status}`, s.x, s.y, ssz));
     if (jumpDests.has(s.name)) g.appendChild(el("circle", { cx: s.x, cy: s.y, r: ssz / 2 + 9, class: "jump-ring" }));
 
@@ -316,10 +335,20 @@ function renderHud(v) {
     const domCol = h.id === 0 ? "var(--p1)" : "var(--p2-bright)";
     const domHtml = domTarget ? `
       <div class="dom" title="Map control — first to ${domTarget} wins">
-        <span class="dom-label">CONTROL</span>
+        <span class="dom-label"><svg class="ic-dom" viewBox="0 0 64 64"><use href="#res-domination"/></svg>CONTROL</span>
         <div class="dom-bar"><div class="dom-fill" style="width:${pct}%;background:${domCol}"></div></div>
         <span class="dom-num">${dom}/${domTarget}</span>
       </div>` : "";
+    // Lives (the hunt): filled/empty pips; run to 0 and you're eliminated.
+    const livesMax = v.lives_max || 0;
+    const livesNow = (v.lives && v.lives[h.id] != null) ? v.lives[h.id] : livesMax;
+    let livesHtml = "";
+    if (livesMax) {
+      let pips = "";
+      for (let i = 0; i < livesMax; i++)
+        pips += `<svg class="ic-life" viewBox="0 0 24 24"><use href="#${i < livesNow ? "hud-life-filled" : "hud-life-empty"}"/></svg>`;
+      livesHtml = `<div class="lives" title="Lives — lose all and you're eliminated">${pips}</div>`;
+    }
     card.innerHTML = `
       <svg class="avatar" viewBox="0 0 140 140"><use href="#${h.id === 0 ? "ship-warm" : "ship-cool"}"/></svg>
       <div class="meta">
@@ -332,6 +361,7 @@ function renderHud(v) {
           <span class="stat"><svg class="ic" viewBox="0 0 64 64"><use href="#res-overcharge"/></svg><b>${h.banked_overcharge}</b> banked</span>
         </div>
         ${domHtml}
+        ${livesHtml}
         <div class="badges">${badges}</div>
       </div>`;
     host.appendChild(card);

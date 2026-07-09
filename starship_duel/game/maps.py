@@ -23,6 +23,12 @@ class GameMap:
     # rendering the graph in the web UI.  ``None`` -> the UI falls back to a
     # circular layout.
     layout: Optional[Dict[System, Tuple[float, float]]] = None
+    # Per-map turn-order handicap for the SECOND mover.  A single global komi
+    # can't balance maps with very different first-mover advantage (map3's tight
+    # 3-binary core is far more first-mover-friendly than map1/map2), so a map may
+    # override the config default.  ``None`` -> fall back to GameConfig.komi_*.
+    komi_domination: Optional[int] = None
+    komi_energy: Optional[int] = None
 
     # -- structure -----------------------------------------------------------
     @property
@@ -122,6 +128,9 @@ REFERENCE_MAP = GameMap(
     adjacency={k: tuple(v) for k, v in _REFERENCE_ADJ.items()},
     binary_systems=frozenset({"Kestrel Binary", "Halcyon Binary", "Aurelia Binary"}),
     layout=_REFERENCE_LAYOUT,
+    # Recalibrated for the lives/hunt meta: games are short, so komi bites harder
+    # and the old 10/12 overshot (mirror first-mover ~43%, second-mover favored).
+    komi_domination=8, komi_energy=8,
 )
 REFERENCE_MAP.validate()
 
@@ -148,6 +157,7 @@ MAP2 = GameMap(
     id="map2",
     adjacency={k: tuple(v) for k, v in _MAP2_ADJ.items()},
     binary_systems=frozenset({"Halvennor Binary", "Zoryne Binary"}),
+    komi_domination=9, komi_energy=11,   # lives meta: 12/16 overshot to ~24%
 )
 MAP2.validate()
 
@@ -168,6 +178,8 @@ MAP3 = GameMap(
     id="map3",
     adjacency={k: tuple(v) for k, v in _MAP3_ADJ.items()},
     binary_systems=frozenset({"Meridian Binary", "Ashkarn Binary", "Ostravel Binary"}),
+    # Tight 3-binary core; least first-mover-favored map -> lightest komi.
+    komi_domination=5, komi_energy=6,
 )
 MAP3.validate()
 
@@ -193,6 +205,7 @@ MAP4 = GameMap(
     id="map4",
     adjacency={k: tuple(v) for k, v in _MAP4_ADJ.items()},
     binary_systems=frozenset({"Nytheris Binary", "Threndal Binary"}),
+    komi_domination=6, komi_energy=6,   # lives meta: 10/10 overshot to ~38%
 )
 MAP4.validate()
 

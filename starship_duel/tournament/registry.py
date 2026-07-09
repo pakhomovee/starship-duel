@@ -32,7 +32,9 @@ from ..arena import SubprocessBot
 from ..bots import Bot, make_bot
 
 #: Reference bots every tournament includes; also the partial-standings opponents.
-BASELINES = ("random", "heuristic", "ppo-easy", "ppo-medium")
+#: The map-universal ``uppo`` tiers play the current game on any map; the legacy
+#: ``ppo-*`` tiers are retained for continuity.
+BASELINES = ("random", "heuristic", "hunter", "uppo-easy", "uppo")
 
 _DEFAULT_TIMEOUT = 1.0
 

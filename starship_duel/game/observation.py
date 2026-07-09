@@ -36,6 +36,9 @@ class Observation:
     # Map-control race (public): points banked per ship and the target to win.
     domination: List[int]
     domination_target: int
+    # Lives remaining (public): this ship's and the rival's (the hunt dimension).
+    lives: int
+    rival_lives: int
     skirmish_number: int
     turn_ship: ShipId
     turn_number: int
@@ -69,6 +72,11 @@ class Observation:
     # rival_last_seen``.
     rival_last_seen: Optional[System]
     rival_moves_since_seen: int
+
+    # Systems whose owner this observer has actually sensed (see engine fog).  A
+    # system in ``system_owner`` that is NOT here is unknown/fogged, not proven
+    # unowned.  ``None`` means "no fog" (every system known) for legacy callers.
+    owner_known: Optional[frozenset] = None
 
     # -- convenience for policies / bots ------------------------------------
     legal_actions: List[Action] = field(default_factory=list)
@@ -119,13 +127,18 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
         map_id=st.map_id,
         adjacency={s: list(n) for s, n in engine.map.adjacency.items()},
         binary_systems=sorted(st.binary_systems),
-        system_owner=dict(st.system_owner),
+        # Fogged ownership: only what this observer has actually sensed.  A rival's
+        # deep-cloaked claims stay hidden here until this ship patrols/scouts them.
+        system_owner=dict(engine.observed_owner[ship]),
+        owner_known=frozenset(engine.owner_known[ship]),
         system_status={s: v.value for s, v in st.system_status.items()},
         system_cache=cache_view,
         system_collapse_in=collapse_in,
         campaign_score=list(st.campaign_score),
         domination=list(st.domination),
         domination_target=engine.config.domination_target,
+        lives=st.lives[ship],
+        rival_lives=st.lives[rival_id],
         skirmish_number=st.skirmish_number,
         turn_ship=st.turn_ship,
         turn_number=st.turn_number,

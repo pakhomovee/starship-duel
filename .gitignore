@@ -12,3 +12,5 @@ submissions/
 
 *.db-shm
 *.db-wal
+
+runs/

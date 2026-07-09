@@ -27,12 +27,13 @@ class GameConfig:
     # contest the rival's, so scouting, abilities and attacks all earn their
     # keep instead of hiding until the field collapses.
     domination_enabled: bool = True
-    # Lowered from 50: at 50 the points race never resolved a competitive game
-    # (knockouts ended things at ~turn 8, control only ~13-15 by then), so
-    # domination was decorative.  ~25 makes out-controlling the map a win path
-    # that can actually fire before a knockout, so hiding loses on points and
-    # players are forced out to CLAIM/contest.  Tune from results.
-    domination_target: int = 25
+    # Territory-control mode (enable_instakill=False, below): FIRE only *raids*
+    # domination points, so games run longer and are decided purely on the
+    # control race -- raised 25 -> 40 to give that race room to breathe now that
+    # a knockout can't end things early.  Also lifts the effective energy budget
+    # (energy and domination share the income stream), making abilities more
+    # affordable.  Tune from results.
+    domination_target: int = 80
 
     # -- action costs (spec 4) ----------------------------------------------
     # Priced against the actual energy budget: a ship earns ~16 Energy over a
@@ -47,7 +48,16 @@ class GameConfig:
     # spending.  Only DEEP_CLOAK earned its keep (it defends a control lead).  So
     # OVERCHARGE and the power unlocks are cut hard, and caches (below) are boosted
     # to create spendable surplus that does NOT advance domination.
-    cost_scan: int = 4                       # cheap: locate the rival often
+    # Rebalance iteration 2 (territory-control): a FREE-and-unlimited FIRE was a
+    # "scan-and-raid" -- the policy sprayed it every turn, so paying energy to
+    # locate (SCAN) was strictly dominated and SCAN/LRS/JAMMING/DEEP_CLOAK all
+    # went unused.  Fix: FIRE now costs energy (charged on every attempt, hit or
+    # miss), so blind spam self-punishes and a raid becomes a committed strike you
+    # take only when protected (DEEP_CLOAK), able to escape (OVERCHARGE), or when
+    # the rival is too energy-poor to raid back.  SCAN is made FREE so locating is
+    # pure tempo -- the read you want before committing an energy-costed raid.
+    cost_scan: int = 0                       # FREE: locating is tempo-only, no energy
+    cost_fire: int = 3                       # raiding costs energy (territory mode only)
     cost_deep_cloak: int = 14                # mid: claim / sit in enemy space safely
     cost_overcharge: int = 6                 # was 18: +1 action must be cheap to snowball claims
     cost_unlock_proximity_alert: int = 6     # cheap permanent defense
@@ -88,6 +98,61 @@ class GameConfig:
     # Plies a system spends DESTABILIZING (visibly warning) before it goes
     # supernova.  6 plies = 3 of EACH player's own turns of advance notice.
     shrink_warning: int = 6
+
+    # -- FIRE semantics: assassination vs territory-control ------------------
+    # enable_instakill=True: the classic duel -- FIRE while co-located with the
+    #   rival is an instant win (end_reason "fire_hit").
+    # enable_instakill=False (default): territory-control -- FIRE is a "raid"
+    #   that transfers ``fire_domination_steal`` domination points from the rival
+    #   to the shooter (capped at what the rival has) and exposes the raider,
+    #   instead of killing.  The only win paths become domination and death by
+    #   collapse, so combat becomes a comeback/anti-leader tool rather than a
+    #   coin-flip assassination -- and locating the rival (SCAN / Long-Range
+    #   Scanners) finally earns its keep.  A deep-cloaked rival can't be raided.
+    enable_instakill: bool = False
+    fire_domination_steal: int = 10
+
+    # -- lives / the hunt ----------------------------------------------------
+    # A kill dimension on top of territory control: a landed FIRE (raid) also
+    # costs the rival a LIFE and respawns it hidden at a random safe system, so
+    # the victim must be re-located after every hit -- which makes *hunting* a
+    # real win path and gives the locate tools (SCAN / LRS / tracking) a job.
+    # Run the rival out of ``lives`` to win by "eliminated".  Deep cloak prevents
+    # the hit outright, so it defends lives as well as territory.
+    lives_enabled: bool = True
+    lives: int = 3
+    # Capture-on-raid: a landed FIRE also flips the co-located system to the
+    # shooter (if the rival owned it).  This is what makes combat a *threat you
+    # must answer* -- to raid you hunt the enemy ship into its own territory and
+    # take the ground under it, so the leader must defend (needs PROXIMITY_ALERT
+    # to see it coming) and the attacker must locate/track (SCAN / LRS) and punch
+    # through radar (DEEP_CLOAK).  Without this, combat is an ignorable point-skim
+    # and the game collapses to a first-mover claim race.
+    fire_captures_system: bool = True
+
+    # -- turn-order fairness (komi) -----------------------------------------
+    # The mover-one tempo edge compounds in a pure claim race (measured mirror
+    # first-mover win rate ~76%).  Give the SECOND mover a starting handicap to
+    # pull that toward ~55%.  Tune ``komi_domination`` up if first-mover stays
+    # high, down if it overshoots; ``komi_energy`` gives a little turn-one agency.
+    # A flat domination head-start alone dilutes against the compounding tempo
+    # race, so komi is tempo-aware: ``komi_energy`` = one OVERCHARGE (cost 6) lets
+    # the second mover buy an extra action on turn one to match the first mover's
+    # claim, and ``komi_domination`` tops up the points race.  These are a first
+    # guess -- calibrate both from the retrained mirror first-mover win rate.
+    komi_domination: int = 8
+    komi_energy: int = 6
+
+    # -- radar unlocks: information tools with a job (see _do_jump/_start_turn) --
+    # PROXIMITY_ALERT (defensive): you detect the rival when it moves onto or next
+    #   to a system you own or your ship -- an early warning of an incoming raid.
+    # LONG_RANGE_SCANNERS (offensive): you passively track the rival's exact
+    #   system each turn while it is within ``lrs_range`` hops of you, and you see
+    #   ownership two hops out.  Lets you line up capture-raids without spending a
+    #   SCAN every turn.
+    # Both are defeated by DEEP_CLOAK (immune to every exposure trigger), so cloak
+    # is the way to punch a raid through a radar-defended opponent.
+    lrs_range: int = 2
 
     # End-of-turn forced fire (spec 5): if a ship ends its turn co-located with
     # the rival without having FIRE-d, the rival auto-fires and the mover loses.
