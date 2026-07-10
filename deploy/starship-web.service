@@ -1,0 +1,38 @@
+# /etc/systemd/system/starship-web.service
+# Public-facing FastAPI app. Binds LOOPBACK ONLY — Caddy terminates TLS in front
+# and proxies to it. Runs as the unprivileged 'starship' user, which also owns the
+# rootless Docker daemon that isolates untrusted bots.
+[Unit]
+Description=Starship Duel web server (FastAPI/uvicorn)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=starship
+Group=starship
+WorkingDirectory=/opt/starship-duel
+EnvironmentFile=/etc/starship/starship.env
+
+# SINGLE process on purpose: live game sessions live in memory, so do NOT add
+# uvicorn --workers (each worker would have its own, unshared session pool).
+# Never change --host off 127.0.0.1: the app must not be directly reachable.
+ExecStart=/opt/starship-duel/.venv/bin/uvicorn starship_duel.web.server:app \
+    --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
+
+Restart=on-failure
+RestartSec=3
+
+# --- hardening (kept compatible with the rootless-docker client) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

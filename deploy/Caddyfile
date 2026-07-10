@@ -1,0 +1,33 @@
+# /etc/caddy/Caddyfile — TLS reverse proxy for Starship Duel.
+# Caddy auto-provisions a Let's Encrypt cert for the domain, redirects HTTP->HTTPS,
+# and transparently proxies both REST and the /ws WebSocket to the loopback app.
+#
+# Prereqs: an A/AAAA record for starships.mopmacaque.com -> this host's public IP,
+# and inbound 80+443 open (80 is needed for the ACME challenge).
+
+starships.mopmacaque.com {
+	encode zstd gzip
+
+	# Security headers. HSTS only makes sense once HTTPS is confirmed working.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Cap request bodies so a huge upload can't exhaust the box. Bot sources are
+	# <=256 KiB (enforced in-app too); 1 MiB leaves generous headroom.
+	request_body {
+		max_size 1MB
+	}
+
+	# Caddy sets X-Forwarded-For/-Proto automatically; the app trusts them only
+	# from 127.0.0.1 (see uvicorn --forwarded-allow-ips).
+	reverse_proxy 127.0.0.1:8000
+
+	log {
+		output file /var/log/caddy/starship.access.log
+	}
+}

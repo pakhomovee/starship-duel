@@ -214,10 +214,50 @@ class TestWebApi(unittest.TestCase):
         self.assertIn("edges", replay["frames"][0])
         self.assertTrue(replay["frames"][-1]["done"])
 
-        # Deletion removes it; a missing replay is a 404.
-        self.assertEqual(self.client.delete(f"/api/games/{g['rid']}").status_code, 200)
+        # Replays are shared history: anonymous deletion is forbidden now.
+        self.assertEqual(self.client.delete(f"/api/games/{g['rid']}").status_code, 403)
+        self.assertEqual(len(self.client.get("/api/games").json()["games"]), 1)
+
+        # An admin (here via the shared admin token) can delete; then it's a 404.
+        from starship_duel.web import server
+        old_admin = server.ADMIN_TOKEN
+        server.ADMIN_TOKEN = "adm1n"
+        try:
+            r = self.client.delete(f"/api/games/{g['rid']}",
+                                   headers={"X-Admin-Token": "adm1n"})
+            self.assertEqual(r.status_code, 200)
+        finally:
+            server.ADMIN_TOKEN = old_admin
         self.assertEqual(self.client.get("/api/games").json()["games"], [])
         self.assertEqual(self.client.get(f"/api/games/{g['rid']}/replay").status_code, 404)
+
+    def test_concurrent_games_coexist(self):
+        # Public hosting: one visitor creating a game must not wipe another's
+        # (the old single-user behaviour cleared all sessions on every create).
+        g1 = self.client.post("/api/game", json={"ship0": "heuristic", "ship1": "random",
+                                                 "seed": 1}).json()["game_id"]
+        g2 = self.client.post("/api/game", json={"ship0": "heuristic", "ship1": "random",
+                                                 "seed": 2}).json()["game_id"]
+        self.assertNotEqual(g1, g2)
+        # Both are still independently reachable.
+        self.assertEqual(self.client.get(f"/api/game/{g1}").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/game/{g2}").status_code, 200)
+
+    def test_login_is_rate_limited(self):
+        from starship_duel.web import server
+        server.LOGIN_LIMITER.reset(f"testclient:ghost")  # isolate from other tests
+        max_fails = server.LOGIN_LIMITER.max_hits
+        # Wrong credentials are 401 up to the threshold, then 429 (locked out).
+        for _ in range(max_fails):
+            self.assertEqual(
+                self.client.post("/api/login",
+                                 json={"username": "ghost", "password": "x"}).status_code,
+                401)
+        self.assertEqual(
+            self.client.post("/api/login",
+                             json={"username": "ghost", "password": "x"}).status_code,
+            429)
+        server.LOGIN_LIMITER.reset(f"testclient:ghost")
 
 
 @unittest.skipUnless(_HAVE_WEB and _HAVE_NX, "web/networkx deps not installed")

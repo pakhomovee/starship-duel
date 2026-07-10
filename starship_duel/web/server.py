@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
+import time
 from pathlib import Path
 from typing import Dict, Optional, Union
 
@@ -57,7 +59,18 @@ if not _pkg_log.handlers:
 app = FastAPI(title="Starship Duel")
 
 _STATIC = Path(__file__).parent / "static"
+
+# Live game sessions, keyed by game id. Each session owns its bot subprocesses /
+# sandbox containers, so the pool is *bounded* and idle sessions are reaped: a
+# public visitor's game no longer wipes everyone else's (the old single-user
+# behaviour), but we still can't let sessions — and their containers — pile up
+# without limit. Guarded by _SESSIONS_LOCK for the threadpool request workers.
 SESSIONS: Dict[str, GameSession] = {}
+_SESSIONS_LOCK = threading.Lock()
+# Max concurrent live games (each may hold a sandbox container per bot) and how
+# long a game may sit untouched before it's reaped. Both tunable via env.
+MAX_LIVE_SESSIONS = int(os.environ.get("STARSHIP_MAX_LIVE_SESSIONS", "32"))
+SESSION_IDLE_TTL = float(os.environ.get("STARSHIP_SESSION_IDLE_SECONDS", "1800"))
 
 # Persistent record of every finished skirmish (browse + replay). Path comes
 # from $STARSHIP_GAMES_DB, defaulting to ./starship_games.db.
@@ -141,13 +154,91 @@ class CreateUserReq(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# rate limiting (in-process, dependency-free)                                  #
+# --------------------------------------------------------------------------- #
+class _RateLimiter:
+    """A sliding-window limiter: at most ``max_hits`` recorded hits per ``window``
+    seconds per key. Used to throttle password guessing on /api/login."""
+
+    def __init__(self, max_hits: int, window: float):
+        self.max_hits = max_hits
+        self.window = window
+        self._hits: Dict[str, list] = {}
+        self._lock = threading.Lock()
+
+    def _prune(self, key: str, now: float) -> list:
+        q = [t for t in self._hits.get(key, ()) if now - t < self.window]
+        if q:
+            self._hits[key] = q
+        else:
+            self._hits.pop(key, None)
+        return q
+
+    def allowed(self, key: str) -> bool:
+        now = time.time()
+        with self._lock:
+            return len(self._prune(key, now)) < self.max_hits
+
+    def hit(self, key: str) -> None:
+        now = time.time()
+        with self._lock:
+            self._prune(key, now)
+            self._hits.setdefault(key, []).append(now)
+
+    def reset(self, key: str) -> None:
+        with self._lock:
+            self._hits.pop(key, None)
+
+
+# Lock out after 10 failed logins per (ip, username) within 5 minutes; a success
+# clears the counter. Bounds brute-forcing without punishing honest typos.
+LOGIN_LIMITER = _RateLimiter(
+    max_hits=int(os.environ.get("STARSHIP_LOGIN_MAX_FAILS", "10")),
+    window=float(os.environ.get("STARSHIP_LOGIN_WINDOW_SECONDS", "300")),
+)
+
+
+def _client_ip(request: Request) -> str:
+    """Best-effort client IP. Behind our own reverse proxy the socket peer is
+    localhost, so honour X-Forwarded-For (Caddy/nginx set it); the left-most hop
+    is the original client."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# --------------------------------------------------------------------------- #
 # helpers                                                                      #
 # --------------------------------------------------------------------------- #
+def _reap_idle_locked(now: float) -> None:
+    """Close and drop sessions untouched for longer than SESSION_IDLE_TTL.
+    Caller must hold _SESSIONS_LOCK."""
+    stale = [gid for gid, s in SESSIONS.items()
+             if now - getattr(s, "last_access", now) > SESSION_IDLE_TTL]
+    for gid in stale:
+        SESSIONS.pop(gid).close()
+
+
+def _register_session_locked(s: GameSession) -> None:
+    """Insert a new session, reaping idle ones and evicting the oldest if we're at
+    capacity (its bot containers are torn down). Caller holds _SESSIONS_LOCK."""
+    now = time.time()
+    s.last_access = now
+    _reap_idle_locked(now)
+    while len(SESSIONS) >= MAX_LIVE_SESSIONS:
+        oldest = min(SESSIONS, key=lambda g: getattr(SESSIONS[g], "last_access", 0.0))
+        SESSIONS.pop(oldest).close()
+    SESSIONS[s.id] = s
+
+
 def _get(game_id: str) -> GameSession:
-    s = SESSIONS.get(game_id)
-    if s is None:
-        raise HTTPException(404, f"no game {game_id}")
-    return s
+    with _SESSIONS_LOCK:
+        s = SESSIONS.get(game_id)
+        if s is None:
+            raise HTTPException(404, f"no game {game_id}")
+        s.last_access = time.time()  # keep active games from being reaped
+        return s
 
 
 def _default_perspective(s: GameSession) -> Union[str, int]:
@@ -205,14 +296,13 @@ def create_game(req: CreateGame):
             raise HTTPException(400, f"unknown controller {c!r}")
     if req.map_id is not None and req.map_id not in {m.id for m in MAPS}:
         raise HTTPException(400, f"unknown map {req.map_id!r}")
-    # Single-user localhost tool: tear down previous games (and their subprocess
-    # bots) so external processes don't accumulate.
-    for old in list(SESSIONS.values()):
-        old.close()
-    SESSIONS.clear()
+    # Multi-user hosting: keep each visitor's game alive independently, but bound
+    # the pool so bot subprocesses / sandbox containers can't accumulate without
+    # limit — idle games are reaped and the oldest is evicted at capacity.
     s = GameSession(controllers, config=GameConfig(), seed=req.seed,
                     map_id=req.map_id, arena=ARENA, store=STORE)
-    SESSIONS[s.id] = s
+    with _SESSIONS_LOCK:
+        _register_session_locked(s)
     return _view(s)
 
 
@@ -275,7 +365,8 @@ def game_replay(rid: str):
 
 
 @app.delete("/api/games/{rid}")
-def delete_game(rid: str):
+def delete_game(rid: str, request: Request):
+    _require_admin(request)  # replays are shared history: admin-only deletion
     if not STORE.delete(rid):
         raise HTTPException(404, f"no recorded game {rid}")
     return {"deleted": rid}
@@ -314,10 +405,15 @@ def _check_scope(scope: str) -> str:
 
 
 @app.post("/api/login")
-def login(req: LoginReq, response: Response):
+def login(req: LoginReq, request: Request, response: Response):
+    key = f"{_client_ip(request)}:{req.username}"
+    if not LOGIN_LIMITER.allowed(key):
+        raise HTTPException(429, "too many failed login attempts; try again later")
     u = ACCOUNTS.verify_login(req.username, req.password)
     if u is None:
+        LOGIN_LIMITER.hit(key)
         raise HTTPException(401, "invalid username or password")
+    LOGIN_LIMITER.reset(key)  # clear the counter on a successful login
     token = ACCOUNTS.create_session(u["id"])
     response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=7 * 24 * 3600)
     return {"username": u["username"], "is_admin": bool(u["is_admin"])}
@@ -471,6 +567,7 @@ async def watch(ws: WebSocket, game_id: str):
             # Auto-advance bot actions, stopping when it's a human's turn or the
             # skirmish ends (so human-vs-bot pauses for your input).
             while s.can_step_bot():
+                s.last_access = time.time()  # active watch: don't reap under us
                 await step_once()
                 await send_state()
                 await asyncio.sleep(max(delay, 0.02))
@@ -481,6 +578,7 @@ async def watch(ws: WebSocket, game_id: str):
     try:
         while True:
             msg = await ws.receive_json()
+            s.last_access = time.time()  # active watch: keep out of the idle reaper
             cmd = msg.get("cmd")
             if cmd == "step":
                 if play_task:

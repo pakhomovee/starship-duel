@@ -1,0 +1,33 @@
+# /etc/systemd/system/starship-worker.service
+# Tournament match worker(s). Pulls queued matches and plays them, running every
+# untrusted bot inside the rootless-docker sandbox. Not network-facing itself.
+# Scale throughput by raising --workers here (the WEB service must stay single).
+[Unit]
+Description=Starship Duel tournament worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=starship
+Group=starship
+WorkingDirectory=/opt/starship-duel
+EnvironmentFile=/etc/starship/starship.env
+ExecStart=/opt/starship-duel/.venv/bin/python -m starship_duel.tournament.worker --workers 4
+
+Restart=on-failure
+RestartSec=3
+
+# --- hardening (same posture as the web unit) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

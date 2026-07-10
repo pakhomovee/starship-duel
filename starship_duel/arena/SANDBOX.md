@@ -48,7 +48,12 @@ reaped by `--rm` at match end.
 
 `STARSHIP_SANDBOX_IMAGE`, `STARSHIP_SANDBOX_MEMORY_MB` (256), `STARSHIP_SANDBOX_CPUS`
 (1.0), `STARSHIP_SANDBOX_PIDS` (128), `STARSHIP_SANDBOX_TMPFS_MB` (64),
-`STARSHIP_SANDBOX_BUILD_TIMEOUT` (180s).
+`STARSHIP_SANDBOX_BUILD_TIMEOUT` (180s), `STARSHIP_SANDBOX_COMPILE_MEMORY_MB` (1024).
+
+> The C++ *compile* container has a separate, larger memory ceiling
+> (`STARSHIP_SANDBOX_COMPILE_MEMORY_MB`, default 1024) than the per-bot *run* cap:
+> `cc1plus` compiling the vendored `nlohmann/json` is OOM-killed at 256 MB, which
+> would otherwise fail every C++ submission. Keep it at ~768 MB or higher.
 
 > Note: the first move of a match pays container start-up (~0.5–1s). `SubprocessBot`
 > treats a slow move as a *strike + safe default*, never a loss, so a cold start

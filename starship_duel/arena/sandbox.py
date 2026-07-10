@@ -74,6 +74,11 @@ class SandboxSpec:
     mode: str = "auto"                 # auto | docker | none
     image: str = _IMAGE_DEFAULT
     memory_mb: int = 256
+    #: Memory cap for the C++ *compile* container. Deliberately much larger than
+    #: memory_mb: cc1plus building the vendored nlohmann/json is OOM-killed at
+    #: 256 MB, which would fail every C++ submission. Compiling is a trusted,
+    #: short-lived step, so a fat ceiling here is fine.
+    compile_memory_mb: int = 1024
     cpus: float = 1.0
     pids: int = 128
     tmpfs_mb: int = 64
@@ -96,6 +101,7 @@ class SandboxSpec:
             mode=(os.environ.get("STARSHIP_SANDBOX") or "auto").strip().lower(),
             image=os.environ.get("STARSHIP_SANDBOX_IMAGE") or _IMAGE_DEFAULT,
             memory_mb=_f("STARSHIP_SANDBOX_MEMORY_MB", int, 256),
+            compile_memory_mb=_f("STARSHIP_SANDBOX_COMPILE_MEMORY_MB", int, 1024),
             cpus=_f("STARSHIP_SANDBOX_CPUS", float, 1.0),
             pids=_f("STARSHIP_SANDBOX_PIDS", int, 128),
             tmpfs_mb=_f("STARSHIP_SANDBOX_TMPFS_MB", int, 64),
@@ -134,11 +140,12 @@ class SandboxSpec:
                 "available on PATH; refusing to run untrusted code unsandboxed.")
 
     # -- argv construction ---------------------------------------------------
-    def _limits(self) -> List[str]:
+    def _limits(self, memory_mb: Optional[int] = None) -> List[str]:
         # memory == memory-swap disables swap (no swap escape hatch for a hog).
+        mem = memory_mb or self.memory_mb
         return [
-            "--memory", f"{self.memory_mb}m",
-            "--memory-swap", f"{self.memory_mb}m",
+            "--memory", f"{mem}m",
+            "--memory-swap", f"{mem}m",
             "--cpus", str(self.cpus),
             "--pids-limit", str(self.pids),
             "--cap-drop", "ALL",
@@ -186,7 +193,9 @@ class SandboxSpec:
         argv = [
             "docker", "run", "--rm", "--init",
             "--network", "none",
-            *self._limits(),
+            # Compiling needs far more memory than running the bot (cc1plus +
+            # nlohmann/json), so use the dedicated compile ceiling here.
+            *self._limits(self.compile_memory_mb),
             "--read-only",
             "--tmpfs", f"/tmp:rw,size={max(self.tmpfs_mb, 256)}m,nosuid,nodev",
             "-v", f"{mount_dir}:/bot:rw",

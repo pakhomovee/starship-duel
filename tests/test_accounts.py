@@ -105,6 +105,14 @@ class TestSmokeAndBridge(unittest.TestCase):
         self.assertFalse(ok2)
 
     def test_active_submission_becomes_competitor(self):
+        # This checks the bare-subprocess launch contract (absolute argv, no cwd
+        # override), so pin that mode explicitly — otherwise the assertions depend
+        # on whether a docker daemon happens to be present in the environment.
+        _prev = os.environ.get("STARSHIP_SANDBOX")
+        self.addCleanup(lambda: os.environ.__setitem__("STARSHIP_SANDBOX", _prev)
+                        if _prev is not None else os.environ.pop("STARSHIP_SANDBOX", None))
+        os.environ["STARSHIP_SANDBOX"] = "none"
+
         uid = self.store.create_user("carol", "pw")
         sid = self.store.add_submission(uid, "carol", "bot.py", _EXAMPLE_BOT.read_bytes())
         self.store.set_submission_status(sid, "validated", "ok", make_active=True)
