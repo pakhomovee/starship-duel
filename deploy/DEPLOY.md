@@ -48,19 +48,71 @@ sudo -u starship .venv/bin/pip install -r requirements.txt
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y docker.io uidmap dbus-user-session fuse-overlayfs
+sudo apt-get install -y docker.io uidmap dbus-user-session fuse-overlayfs slirp4netns
 sudo systemctl disable --now docker.service docker.socket || true   # no rootful daemon
 
 # Let the starship user's services + dockerd run without an active login:
 sudo loginctl enable-linger starship
-
-# Install the rootless daemon AS the starship user:
-sudo -iu starship dockerd-rootless-setuptool.sh install
-sudo -iu starship systemctl --user enable --now docker
-sudo -iu starship docker run --rm hello-world      # must succeed
 ```
 
-Find the uid and record the socket path — you need it in the env file:
+**3a. Subordinate uid/gid ranges.** Rootless Docker maps container uids into a
+delegated subid range. A user created with `adduser --system` (step 1) gets **no**
+such range, and the setuptool then fails to create the unit. Confirm and, if empty,
+add one:
+
+```sh
+grep -E '^starship:' /etc/subuid /etc/subgid      # both must return a line
+# If empty, allocate a 65536-wide block that does not overlap existing ranges
+# (check `cat /etc/subuid /etc/subgid` first — a regular user may already hold 100000):
+sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 starship
+# usermod refuses for some system users; if so, append directly:
+#   echo 'starship:100000:65536' | sudo tee -a /etc/subuid
+#   echo 'starship:100000:65536' | sudo tee -a /etc/subgid
+```
+
+**3b. `starship` is a lingering user with no login session**, so every `sudo -iu
+starship` docker/systemctl call needs `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS`
+in its environment or you get `Failed to connect to bus: No medium found`. Define a
+helper to keep the commands readable:
+
+```sh
+SUID=$(id -u starship)
+asstarship() { sudo -iu starship XDG_RUNTIME_DIR=/run/user/$SUID \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$SUID/bus \
+  DOCKER_HOST=unix:///run/user/$SUID/docker.sock "$@"; }
+```
+
+**3c. Disable Docker networking BEFORE first start.** All bots run `--network none`
+(see [arena sandbox](../starship_duel/arena/SANDBOX.md)), so Docker never needs its
+bridge — and on many VPS kernels dockerd cannot program nftables even inside
+RootlessKit's namespace, so bridge setup at startup kills the daemon with
+`iptables ... nf_tables: Permission denied (you must be root)`. Turn it off in the
+**rootless** config (`~/.config/docker/daemon.json`, *not* `/etc/docker/`):
+
+```sh
+sudo -iu starship mkdir -p /home/starship/.config/docker
+sudo -iu starship tee /home/starship/.config/docker/daemon.json >/dev/null <<'EOF'
+{ "iptables": false, "ip6tables": false, "bridge": "none" }
+EOF
+```
+
+**3d. Install + start + smoke-test.** Order matters: the setuptool `install`
+creates the user unit at `~/.config/systemd/user/docker.service` **and** starts the
+daemon. `systemctl --user enable` never creates the unit — run it only *after*
+install, and if you ever `uninstall` (which deletes the unit) you must re-run
+install before enable, or you get `Unit file docker.service does not exist`.
+
+```sh
+asstarship dockerd-rootless-setuptool.sh install    # creates the unit + starts dockerd
+asstarship systemctl --user enable --now docker      # enable at boot (needs linger, step 3)
+
+# NOT `docker run hello-world`: with bridge:none a default-network container has no
+# net, and the CLI needs DOCKER_HOST (the helper sets it) or it hits the rootful
+# socket -> "permission denied ... /var/run/docker.sock". Test the way bots run:
+asstarship docker run --rm --network none alpine true && echo "sandbox-style run OK"
+```
+
+Record the socket path — you need it in the env file (step 4):
 
 ```sh
 id -u starship        # e.g. 1001  -> DOCKER_HOST=unix:///run/user/1001/docker.sock
@@ -69,6 +121,37 @@ id -u starship        # e.g. 1001  -> DOCKER_HOST=unix:///run/user/1001/docker.s
 > Why rootless: if a bot ever broke out of its container, it would be the
 > unprivileged `starship` user, not root. With rootful Docker, docker-group access
 > is root-equivalent and an escape owns the box.
+
+**Troubleshooting the rootless install** (in order — each symptom blocks the next):
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Unit file docker.service does not exist` | `install` never ran, failed, or was undone by `uninstall` — `enable` alone never creates the unit | (re-)run step 3d `install` first, then `enable`; read `install`'s output for the real error |
+| `No subuid ranges found` / install aborts creating the unit | system user has no subid range | step 3a |
+| `Failed to connect to bus: No medium found` | missing `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` | use the `asstarship` helper (3b) |
+| daemon dies with `iptables ... Permission denied (you must be root)` | kernel blocks nftables in the netns | step 3c, then re-run install |
+| `permission denied ... /var/run/docker.sock` | CLI hitting rootful socket | set `DOCKER_HOST` (helper does) or `docker context use rootless` |
+| container start fails: `Could not check if docker-default AppArmor profile was loaded: ... apparmor/profiles: permission denied` | rootless daemon can't load the AppArmor profile (Ubuntu 24.04) | already handled — the sandbox passes `--security-opt apparmor=unconfined`; seccomp + userns + cap-drop still apply |
+| image **pulls/build** fail (but `--network none` runs work) | RootlessKit egress blocked on this kernel | build the arena image where net works, then `docker save`/`load` it in; runtime is unaffected since bots never need net |
+
+To retry a botched install cleanly, run it **as starship** (never as root):
+`asstarship dockerd-rootless-setuptool.sh uninstall -f`.
+
+**Reading the real dockerd error.** When the daemon fails to start, `systemctl
+--user status` only says "control process exited", and `journalctl --user` under
+`sudo -iu` often prints "No journal files were opened due to insufficient
+permissions". Stop the crash-loop and run the daemon in the **foreground** — it
+prints the true failure on the last line, then Ctrl-C:
+
+```sh
+asstarship systemctl --user stop docker
+asstarship dockerd-rootless.sh 2>&1 | tail -40
+```
+
+Ignore the `AppArmor profile ... permission denied` and `Deleting nftables rules ...
+exit status 1` lines — they're benign in rootless mode. The real cause is the last
+`failed to start daemon: ...` line. Also `cat` the config to confirm a fix actually
+landed before restarting: `asstarship cat ~starship/.config/docker/daemon.json`.
 
 ## 4. Configuration + secrets
 

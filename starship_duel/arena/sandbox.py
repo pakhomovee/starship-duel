@@ -150,6 +150,13 @@ class SandboxSpec:
             "--pids-limit", str(self.pids),
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
+            # Rootless Docker on AppArmor hosts (e.g. Ubuntu 24.04) can't read
+            # /sys/kernel/security/apparmor/profiles to load the docker-default
+            # profile, so it refuses every container start. Unconfine it: the
+            # isolation here comes from the user namespace, --cap-drop ALL,
+            # --network none, read-only rootfs and the default seccomp profile
+            # (still applied), not from docker-default AppArmor.
+            "--security-opt", "apparmor=unconfined",
         ]
 
     def run_argv(self, inner: Sequence[str], mount_dir: Path) -> List[str]:

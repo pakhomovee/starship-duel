@@ -36,6 +36,10 @@ STARSHIP_SANDBOX=docker python -m starship_duel.tournament.worker --workers 4
 - `--read-only` root fs + a small `--tmpfs /tmp` (`noexec,nosuid,nodev`) — nothing
   else is writable; the bot's own dir is mounted **read-only** at `/bot`.
 - `--cap-drop ALL`, `--security-opt no-new-privileges`, `--user 65534` (nobody).
+- `--security-opt apparmor=unconfined` — rootless Docker on AppArmor hosts (Ubuntu
+  24.04) can't load the `docker-default` profile and would refuse to start the
+  container; the default **seccomp** profile still applies, and isolation rests on
+  the user namespace + cap-drop + no-new-privileges + `--network none` + read-only fs.
 - `--memory` / `--cpus` / `--pids-limit` — a fork bomb or memory hog is contained.
 - Each bot mounts **only its own** directory, so one competitor can't read another's
   source.

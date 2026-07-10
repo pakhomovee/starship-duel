@@ -64,6 +64,7 @@ class TestRunArgv(unittest.TestCase):
             "--read-only",
             "--cap-drop ALL",
             "--security-opt no-new-privileges",
+            "--security-opt apparmor=unconfined",
             "--user 65534:65534",
             "--memory 128m --memory-swap 128m",
             "--pids-limit 7",
