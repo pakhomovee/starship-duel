@@ -190,14 +190,21 @@ asstarship docker load -i /tmp/arena.tar
 rm -f /tmp/arena.tar
 sudo systemctl stop docker.service                  # back off
 sudo systemctl disable docker.service docker.socket # keep it off
-asstarship python -m starship_duel.arena.sandbox status   # -> present=True
+# sandbox CLI commands must run from the checkout with the venv python; asstarship
+# lands in /home/starship, so cd in and use .venv/bin/python:
+asstarship sh -c 'cd /opt/starship-duel && .venv/bin/python -m starship_duel.arena.sandbox status'   # -> present=True
 ```
 
 *Alternatives* if you'd rather not run the rootful daemon at all: build the image on
-another machine and either `docker push` it to a registry then
-`asstarship python -m starship_duel.arena.sandbox pull ghcr.io/<you>/starship-arena-sandbox:latest`
-(pulls + tags locally — the daemon's own pull egresses via slirp4netns and works),
-or `docker save … | gzip`, copy it over, and `asstarship docker load -i …`.
+another machine and either `docker push` it to a registry then pull + tag it locally
+(the daemon's own pull egresses via slirp4netns and works) —
+
+```sh
+asstarship sh -c 'cd /opt/starship-duel && .venv/bin/python -m starship_duel.arena.sandbox \
+  pull ghcr.io/<you>/starship-arena-sandbox:latest'
+```
+
+— or `docker save … | gzip`, copy it over, and `asstarship docker load -i …`.
 
 Once the image is present, `sandbox build --if-missing` (what `validate-sandbox.sh`
 runs) is a no-op, so validation passes without a build.
@@ -259,9 +266,10 @@ sudo -u starship env $(grep -v '^#' /etc/starship/starship.env | xargs) \
      /opt/starship-duel/deploy/validate-sandbox.sh
 ```
 
-All five checks must pass (docker reachable, sandbox enabled, image builds,
-fail-closed when docker is hidden, and a bot actually runs in a container). If
-any fail, **stop** — do not expose the app.
+All five checks must pass (docker reachable, sandbox enabled, **image present**,
+fail-closed when docker is hidden, and a bot actually runs in a container). Step 3
+of the script is `build --if-missing`, so it accepts the image you loaded above and
+does not try to rebuild. If any check fails, **stop** — do not expose the app.
 
 ## 8. Firewall + SSH hardening (open to the world last)
 
@@ -299,8 +307,11 @@ Reboot promptly when a kernel update lands (`/var/run/reboot-required`).
        -H "X-Admin-Token: $STARSHIP_ADMIN_TOKEN"
   ```
 - **Watch logs:** `journalctl -u starship-web -f` / `-u starship-worker -f`.
-- **Update the app:** `git pull` in `/opt/starship-duel` (as `starship`), then
-  `sudo systemctl restart starship-web starship-worker`.
+- **Update the app:** `sudo -u starship git -C /opt/starship-duel pull`, then
+  `sudo systemctl restart starship-web starship-worker` (the restart is required —
+  the running processes hold the old `sandbox.py` until then). The arena image lives
+  in the daemon, not the repo, so `git pull` doesn't touch it; only rebuild/reload it
+  (rootful-build steps above) if `starship_duel/arena/Dockerfile` changed.
 
 ## Residual risk (know this)
 
