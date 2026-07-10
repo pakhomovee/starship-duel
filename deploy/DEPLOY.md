@@ -34,7 +34,7 @@ sudo chown -R starship:starship /opt/starship-duel /var/lib/starship
 ## 2. Code + virtualenv
 
 ```sh
-sudo -u starship git clone <your-repo-url> /opt/starship-duel
+sudo -u starship git clone https://github.com/pakhomovee/starship-duel /opt/starship-duel
 cd /opt/starship-duel
 sudo -u starship python3 -m venv .venv
 sudo -u starship .venv/bin/pip install -U pip
