@@ -31,9 +31,12 @@ _PPO_TIERS = {
     "ppo-easy": "ckpt_500.pt",
     "ppo-medium": "ckpt_2000.pt",
 }
-# Map-universal (GNN) tiers -- current game, play any map.
+# Map-universal (GNN) tiers -- current game, play any map. Ordered easy < medium <
+# hard: ``uppo`` (the default/hardest) is the ckpt_final policy, which beats the
+# previous top policy (now demoted to ``uppo-medium``) ~73% head-to-head.
 _UPPO_TIERS = {
     "uppo-easy": "uppo-easy.pt",
+    "uppo-medium": "uppo-medium.pt",
     "uppo": "uppo.pt",
 }
 

@@ -30,7 +30,10 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from ..arena.sandbox import SandboxSpec
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -127,20 +130,33 @@ def _ensure_sdk(dir_: Path) -> None:
         (dir_ / "starship_sdk.py").write_bytes(_SDK_SRC.read_bytes())
 
 
-def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: str) -> List[str]:
+def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: str,
+                  sandbox: "Optional[SandboxSpec]" = None) -> List[str]:
     """Materialize a submission and return the argv that runs it.
 
     Python bots run directly; C++ bots are compiled against the bundled SDK
     (``-I`` the vendored nlohmann/json).  Compilation is cached by content hash so
     unchanged bots aren't rebuilt on every server reload / worker start.  Raises
     :class:`BuildError` on an unsupported type or a compile failure.
+
+    When ``sandbox`` is enabled (see :class:`starship_duel.arena.sandbox.SandboxSpec`),
+    the returned argv runs the bot inside a locked-down ``docker`` container and
+    C++ is compiled *in-container* too, so no untrusted code -- source or binary --
+    ever touches the host directly.  ``work_dir`` is the bot's own directory and
+    becomes the container's read-only ``/bot`` mount, so callers must give each
+    bot a private dir (no cross-bot source leakage).
     """
     lang = _language_for(filename)
+    work_dir = work_dir.resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
+    use_sandbox = sandbox is not None and sandbox.enabled
+
     if lang == "python":
         _ensure_sdk(work_dir)
         path = (work_dir / f"{name}.py").resolve()
         path.write_bytes(code)
+        if use_sandbox:
+            return sandbox.run_argv(["python3", f"{name}.py"], work_dir)
         return [sys.executable, str(path)]
 
     # C++: compile to a native binary (cached on the source hash).
@@ -148,25 +164,37 @@ def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: st
     binp = (work_dir / name).resolve()
     hashp = work_dir / f"{name}.sha256"
     digest = hashlib.sha256(code).hexdigest()
+    run_argv = (lambda: sandbox.run_argv([f"./{name}"], work_dir)) if use_sandbox \
+        else (lambda: [str(binp)])
     if binp.exists() and hashp.exists() and hashp.read_text().strip() == digest:
-        return [str(binp)]
+        return run_argv()
     src.write_bytes(code)
-    cxx = os.environ.get("STARSHIP_CXX") or ("g++" if shutil.which("g++") else "clang++")
-    includes = ["-I", str(_CPP_SDK_DIR)]
-    extra = os.environ.get("STARSHIP_CPP_INCLUDE")
-    if extra:
-        includes += ["-I", extra]
-    cmd = [cxx, "-std=c++17", "-O2", *includes, str(src), "-o", str(binp)]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    except FileNotFoundError:
-        raise BuildError(f"no C++ compiler found ({cxx}); install g++/clang++ on the host")
-    except subprocess.TimeoutExpired:
-        raise BuildError("compile timed out (120s)")
+
+    if use_sandbox:
+        # Compile inside the sandbox (untrusted C++ + the compiler itself are
+        # isolated: no network, capped, ephemeral).
+        from ..arena.sandbox import SandboxError
+        try:
+            proc = sandbox.compile_cpp(f"{name}.cpp", name, work_dir, _CPP_SDK_DIR)
+        except SandboxError as e:
+            raise BuildError(str(e))
+    else:
+        cxx = os.environ.get("STARSHIP_CXX") or ("g++" if shutil.which("g++") else "clang++")
+        includes = ["-I", str(_CPP_SDK_DIR)]
+        extra = os.environ.get("STARSHIP_CPP_INCLUDE")
+        if extra:
+            includes += ["-I", extra]
+        cmd = [cxx, "-std=c++17", "-O2", *includes, str(src), "-o", str(binp)]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except FileNotFoundError:
+            raise BuildError(f"no C++ compiler found ({cxx}); install g++/clang++ on the host")
+        except subprocess.TimeoutExpired:
+            raise BuildError("compile timed out (120s)")
     if proc.returncode != 0:
         raise BuildError("compile failed:\n" + (proc.stderr.strip()[-1200:] or "unknown error"))
     hashp.write_text(digest)
-    return [str(binp)]
+    return run_argv()
 
 
 # --------------------------------------------------------------- password ----
@@ -396,21 +424,30 @@ class AccountStore:
                  "code": bytes(r["code"])} for r in rows]
 
 
-def materialize_active(store: AccountStore, out_dir: Optional[str] = None) -> dict:
-    """Write each active submission's source to ``out_dir/<username>.py`` and return
-    ``{username: {"command": [python, path], "timeout": ...}}`` launch specs for the
-    tournament :class:`BotRegistry`."""
+def materialize_active(store: AccountStore, out_dir: Optional[str] = None,
+                       sandbox: "Optional[SandboxSpec]" = None) -> dict:
+    """Write each active submission into its own ``out_dir/<username>/`` directory
+    and return ``{username: {"command": [...], "timeout": ...}}`` launch specs for
+    the tournament :class:`BotRegistry`.
+
+    Each bot gets a *private* directory (source + SDK) so that, once the sandbox
+    mounts it read-only, one competitor can never read another's code.  Absolute
+    paths (build_command resolves them) keep the launch independent of the worker's
+    cwd; C++ bots compile with a hash cache, so this is cheap after the first build
+    even though it runs on every reload / worker start."""
     subs = store.active_submissions()
     if not subs:
         return {}
-    # Absolute paths (build_command resolves them) so the launch is independent of
-    # the worker's cwd. C++ bots compile with a hash cache, so this is cheap after
-    # the first build even though it runs on every reload / worker start.
+    if sandbox is None:
+        from ..arena.sandbox import SandboxSpec as _S
+        sandbox = _S.from_env()
     out = Path(out_dir or default_submissions_dir()).resolve()
     specs = {}
     for sub in subs:
+        bot_dir = out / sub["username"]
         try:
-            command = build_command(sub["code"], sub["filename"], out, sub["username"])
+            command = build_command(sub["code"], sub["filename"], bot_dir,
+                                    sub["username"], sandbox=sandbox)
         except BuildError:
             continue  # a validated bot that no longer builds here is simply skipped
         specs[sub["username"]] = {"command": command, "timeout": 2.0}
@@ -418,11 +455,14 @@ def materialize_active(store: AccountStore, out_dir: Optional[str] = None) -> di
 
 
 def smoke_test(code: bytes, filename: Optional[str] = None, *, out_dir: Optional[str] = None,
-               plies: int = 300, map_id: str = "map1", timeout: float = 2.0) -> tuple:
+               plies: int = 300, map_id: str = "map1", timeout: float = 2.0,
+               sandbox: "Optional[SandboxSpec]" = None) -> tuple:
     """Build the bot (compiling C++ if needed) and play a short game vs ``random``
     to catch build failures, crashes, and protocol errors.
 
-    Returns ``(ok, message)``.  A compile error, or a dead/timed-out process that
+    Runs the candidate through the same isolation path it will compete under (so a
+    bot that only misbehaves *inside* the sandbox is caught at upload).  Returns
+    ``(ok, message)``.  A compile error, or a dead/timed-out process that
     GameSession would forfeit, fails validation here so the author gets immediate
     feedback.
     """
@@ -431,10 +471,14 @@ def smoke_test(code: bytes, filename: Optional[str] = None, *, out_dir: Optional
     from ..bots.random_bot import RandomBot
     from ..game import Engine, GameConfig, build_observation
 
-    tmp = Path(out_dir or default_submissions_dir()).resolve()
+    if sandbox is None:
+        from ..arena.sandbox import SandboxSpec as _S
+        sandbox = _S.from_env()
+    # A private per-candidate dir keeps the sandbox mount tight and cleanup simple.
     name = f"_smoke_{secrets.token_hex(4)}"
+    tmp = Path(out_dir or default_submissions_dir()).resolve() / name
     try:
-        command = build_command(code, filename, tmp, name)
+        command = build_command(code, filename, tmp, name, sandbox=sandbox)
     except BuildError as e:
         return False, str(e)
     bot = SubprocessBot(command, timeout=timeout, name="candidate")
@@ -461,8 +505,4 @@ def smoke_test(code: bytes, filename: Optional[str] = None, *, out_dir: Optional
         return False, f"smoke test error: {type(e).__name__}: {e}"
     finally:
         bot.close()
-        for leftover in tmp.glob(f"{name}*"):  # .py / .cpp / binary / .sha256
-            try:
-                leftover.unlink()
-            except OSError:
-                pass
+        shutil.rmtree(tmp, ignore_errors=True)  # the whole private candidate dir

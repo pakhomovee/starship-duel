@@ -179,7 +179,9 @@ MAP3 = GameMap(
     adjacency={k: tuple(v) for k, v in _MAP3_ADJ.items()},
     binary_systems=frozenset({"Meridian Binary", "Ashkarn Binary", "Ostravel Binary"}),
     # Tight 3-binary core; least first-mover-favored map -> lightest komi.
-    komi_domination=5, komi_energy=6,
+    # Recalibrated against ckpt_final self-play (rl.balance): 5/6 left the second
+    # mover favored (paired mirror first-mover ~44-46%); 4/5 pulls it to ~48-49%.
+    komi_domination=4, komi_energy=5,
 )
 MAP3.validate()
 
