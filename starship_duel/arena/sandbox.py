@@ -224,15 +224,52 @@ class SandboxError(Exception):
     """Isolation could not be established (docker missing / build failure)."""
 
 
-def build_image(spec: Optional[SandboxSpec] = None) -> int:
-    """Build the sandbox image from ``arena/Dockerfile``. Returns the exit code."""
+def image_present(spec: Optional[SandboxSpec] = None) -> bool:
+    """True if the sandbox image already exists in the daemon's local store."""
+    spec = spec or SandboxSpec.from_env()
+    if not docker_available():
+        return False
+    return subprocess.run(
+        ["docker", "image", "inspect", spec.image],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
+def build_image(spec: Optional[SandboxSpec] = None, if_missing: bool = False) -> int:
+    """Build the sandbox image from ``arena/Dockerfile``. Returns the exit code.
+
+    With ``if_missing=True`` the build is skipped when the image already exists.
+    Some hosts forbid networked rootless containers, so ``docker build``'s
+    network-dependent ``RUN`` steps can't run there; on those hosts the image is
+    produced elsewhere and brought in via :func:`pull_image` or ``docker load``,
+    and ``build --if-missing`` lets validation pass without rebuilding. See
+    ``deploy/DEPLOY.md``.
+    """
     spec = spec or SandboxSpec.from_env()
     if not docker_available():
         raise SandboxError("cannot build image: docker CLI not found on PATH")
+    if if_missing and image_present(spec):
+        logger.info("sandbox image %s already present; skipping build", spec.image)
+        return 0
     argv = ["docker", "build", "-t", spec.image, "-f",
             str(_DOCKERFILE_DIR / "Dockerfile"), str(_DOCKERFILE_DIR)]
     logger.info("building sandbox image: %s", " ".join(argv))
     return subprocess.run(argv).returncode
+
+
+def pull_image(reference: str, spec: Optional[SandboxSpec] = None) -> int:
+    """Pull a prebuilt sandbox image from a registry and tag it as ``spec.image``.
+
+    For hosts where ``docker build`` cannot run (kernel forbids networked rootless
+    containers) but the daemon can still ``docker pull``. Returns the exit code.
+    """
+    spec = spec or SandboxSpec.from_env()
+    if not docker_available():
+        raise SandboxError("cannot pull image: docker CLI not found on PATH")
+    rc = subprocess.run(["docker", "pull", reference]).returncode
+    if rc != 0 or reference == spec.image:
+        return rc
+    return subprocess.run(["docker", "tag", reference, spec.image]).returncode
 
 
 def _main(argv=None) -> int:
@@ -240,14 +277,22 @@ def _main(argv=None) -> int:
 
     ap = argparse.ArgumentParser(description="Starship arena docker sandbox")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("build", help="build the sandbox docker image")
+    b = sub.add_parser("build", help="build the sandbox docker image")
+    b.add_argument("--if-missing", action="store_true",
+                   help="skip the build when the image already exists (for hosts "
+                        "where docker build can't run and the image is preloaded)")
+    p = sub.add_parser("pull", help="pull a prebuilt sandbox image and tag it locally")
+    p.add_argument("reference",
+                   help="registry reference, e.g. ghcr.io/you/starship-arena-sandbox:latest")
     sub.add_parser("status", help="report sandbox mode and docker availability")
     args = ap.parse_args(argv)
     spec = SandboxSpec.from_env()
     if args.cmd == "build":
-        return build_image(spec)
+        return build_image(spec, if_missing=args.if_missing)
+    if args.cmd == "pull":
+        return pull_image(args.reference, spec)
     print(f"mode={spec.mode}  docker_available={docker_available()}  "
-          f"enabled={spec.enabled}  image={spec.image}")
+          f"enabled={spec.enabled}  image={spec.image}  present={image_present(spec)}")
     return 0
 
 

@@ -25,8 +25,17 @@ assert SandboxSpec.from_env().enabled, "sandbox not enabled — check STARSHIP_S
 print("enabled=True OK")
 EOF
 
-echo "== 3/5  build the sandbox image =="
-"$PY" -m starship_duel.arena.sandbox build
+echo "== 3/5  ensure the sandbox image is present =="
+# --if-missing builds it if possible, else accepts an image that was preloaded
+# (docker pull / docker load). Some kernels forbid networked rootless containers,
+# so `docker build` can't run there; see deploy/DEPLOY.md.
+if ! "$PY" -m starship_duel.arena.sandbox build --if-missing; then
+    echo "FAIL: sandbox image is missing and could not be built on this host."
+    echo "      Preload it:  docker pull <registry-ref> && docker tag <ref> starship-arena-sandbox"
+    echo "             (or)  docker load -i starship-arena-sandbox.tar.gz"
+    exit 1
+fi
+"$PY" -m starship_duel.arena.sandbox status
 
 echo "== 4/5  fail-closed when docker is hidden =="
 "$PY" - <<'EOF'

@@ -132,7 +132,7 @@ id -u starship        # e.g. 1001  -> DOCKER_HOST=unix:///run/user/1001/docker.s
 | daemon dies with `iptables ... Permission denied (you must be root)` | kernel blocks nftables in the netns | step 3c, then re-run install |
 | `permission denied ... /var/run/docker.sock` | CLI hitting rootful socket | set `DOCKER_HOST` (helper does) or `docker context use rootless` |
 | container start fails: `Could not check if docker-default AppArmor profile was loaded: ... apparmor/profiles: permission denied` | rootless daemon can't load the AppArmor profile (Ubuntu 24.04) | already handled — the sandbox passes `--security-opt apparmor=unconfined`; seccomp + userns + cap-drop still apply |
-| image **pulls/build** fail (but `--network none` runs work) | RootlessKit egress blocked on this kernel | build the arena image where net works, then `docker save`/`load` it in; runtime is unaffected since bots never need net |
+| `docker build` fails, or any networked container errors `operation not permitted` / `iptables ... Permission denied` (yet `docker pull` and `--network none` both work) | this kernel forbids netfilter programming **and** `setns` from the rootless userns (common on hardened / Ubuntu 24.04) — so bridge *and* host networking are unavailable to rootless containers | you can't build on-host; build the image elsewhere and bring it in via `docker pull` or `docker load` — see **"The arena sandbox image"** below |
 
 To retry a botched install cleanly, run it **as starship** (never as root):
 `asstarship dockerd-rootless-setuptool.sh uninstall -f`.
@@ -152,6 +152,58 @@ Ignore the `AppArmor profile ... permission denied` and `Deleting nftables rules
 exit status 1` lines — they're benign in rootless mode. The real cause is the last
 `failed to start daemon: ...` line. Also `cat` the config to confirm a fix actually
 landed before restarting: `asstarship cat ~starship/.config/docker/daemon.json`.
+
+### The arena sandbox image
+
+The daemon runs bots with `--security-opt apparmor=unconfined` (rootless can't load
+`docker-default`; isolation is userns + `--cap-drop ALL` + `--network none` +
+read-only fs + seccomp) — `sandbox.py` passes this automatically.
+
+**You usually cannot `docker build` under the rootless daemon.** On hardened /
+Ubuntu 24.04 kernels the rootless user namespace is denied both netfilter
+programming (bridge NAT → `iptables ... nf_tables: Permission denied`) **and**
+`setns` (host networking → `setns ... operation not permitted`), even with
+`kernel.apparmor_restrict_unprivileged_userns=0` and all NAT modules loaded — only
+`--network none` works. Since the Dockerfile's `RUN apt-get install g++` needs a
+networked container, the *rootless* daemon can't build it. Quick check:
+
+```sh
+asstarship docker run --rm --network=host --security-opt apparmor=unconfined \
+  python:3.12-slim echo ok        # 'operation not permitted' => rootless build won't work
+```
+
+**Fix: build with the rootful daemon, then hand the image to the rootless one.**
+`root` in the host namespace has the caps the rootless userns lacks, so the build
+just works. The rootful daemon runs only for this one trusted build (your own
+Dockerfile, no untrusted code) and is stopped again afterwards, so the runtime
+posture is unchanged.
+
+```sh
+sudo systemctl start docker.service                 # rootful daemon, temporarily
+sudo docker build -t starship-arena-sandbox \
+  -f /opt/starship-duel/starship_duel/arena/Dockerfile \
+  /opt/starship-duel/starship_duel/arena
+# move it from the rootful store into the rootless (starship) store:
+sudo docker save starship-arena-sandbox:latest -o /tmp/arena.tar
+sudo chmod 644 /tmp/arena.tar
+asstarship docker load -i /tmp/arena.tar
+rm -f /tmp/arena.tar
+sudo systemctl stop docker.service                  # back off
+sudo systemctl disable docker.service docker.socket # keep it off
+asstarship python -m starship_duel.arena.sandbox status   # -> present=True
+```
+
+*Alternatives* if you'd rather not run the rootful daemon at all: build the image on
+another machine and either `docker push` it to a registry then
+`asstarship python -m starship_duel.arena.sandbox pull ghcr.io/<you>/starship-arena-sandbox:latest`
+(pulls + tags locally — the daemon's own pull egresses via slirp4netns and works),
+or `docker save … | gzip`, copy it over, and `asstarship docker load -i …`.
+
+Once the image is present, `sandbox build --if-missing` (what `validate-sandbox.sh`
+runs) is a no-op, so validation passes without a build.
+
+> If you hit this, the box is fighting rootless Docker at the kernel level; a
+> dedicated KVM VPS without the userns hardening is the intended long-term home.
 
 ## 4. Configuration + secrets
 
