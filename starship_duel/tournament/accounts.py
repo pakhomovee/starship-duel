@@ -130,6 +130,29 @@ def _ensure_sdk(dir_: Path) -> None:
         (dir_ / "starship_sdk.py").write_bytes(_SDK_SRC.read_bytes())
 
 
+def _relax_perms_for_container(work_dir: Path, files=(), execs=()) -> None:
+    """Make a bot's dir + mounted files readable by the container's non-owner user.
+
+    The sandbox runs the bot as ``--user 65534`` (nobody) against a read-only bind
+    mount, so it must be able to traverse ``/bot`` and read the source/binary — even
+    though the worker writes them under ``UMask=0077`` (mode 0600/0700), which a
+    non-owner can't read (the symptom is ``python3: can't open file ... Permission
+    denied`` and an exit-2 "smoke test" crash). Widen just this bot's own dir; the
+    parent ``submissions/`` stays private, and each bot mounts only its own dir, so
+    no other host user or bot gains access.
+    """
+    try:
+        os.chmod(work_dir, 0o755)
+        for f in files:
+            if f.exists():
+                os.chmod(f, 0o644)
+        for f in execs:
+            if f.exists():
+                os.chmod(f, 0o755)
+    except OSError:
+        pass
+
+
 def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: str,
                   sandbox: "Optional[SandboxSpec]" = None) -> List[str]:
     """Materialize a submission and return the argv that runs it.
@@ -156,6 +179,7 @@ def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: st
         path = (work_dir / f"{name}.py").resolve()
         path.write_bytes(code)
         if use_sandbox:
+            _relax_perms_for_container(work_dir, files=[path, work_dir / "starship_sdk.py"])
             return sandbox.run_argv(["python3", f"{name}.py"], work_dir)
         return [sys.executable, str(path)]
 
@@ -167,6 +191,8 @@ def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: st
     run_argv = (lambda: sandbox.run_argv([f"./{name}"], work_dir)) if use_sandbox \
         else (lambda: [str(binp)])
     if binp.exists() and hashp.exists() and hashp.read_text().strip() == digest:
+        if use_sandbox:
+            _relax_perms_for_container(work_dir, execs=[binp])
         return run_argv()
     src.write_bytes(code)
 
@@ -194,6 +220,8 @@ def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: st
     if proc.returncode != 0:
         raise BuildError("compile failed:\n" + (proc.stderr.strip()[-1200:] or "unknown error"))
     hashp.write_text(digest)
+    if use_sandbox:
+        _relax_perms_for_container(work_dir, files=[src], execs=[binp])
     return run_argv()
 
 

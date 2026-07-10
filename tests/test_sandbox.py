@@ -91,6 +91,26 @@ class TestBuildCommandSandboxed(unittest.TestCase):
         self.assertTrue((tmp / "alice.py").exists())
         self.assertEqual(cmd[-2:], ["python3", "alice.py"])
 
+    def test_sandbox_files_readable_by_container_under_restrictive_umask(self):
+        # Regression: the worker runs with UMask=0077, but the sandbox runs the bot
+        # as --user 65534 against a read-only mount, so the dir must be traversable
+        # and the files readable by 'other' or the container can't open the bot
+        # (exit-2 crash). See accounts._relax_perms_for_container.
+        import os, stat
+        old = os.umask(0o077)
+        try:
+            spec = SandboxSpec(mode="docker")
+            tmp = Path(tempfile.mkdtemp()) / "carol"
+            build_command(b"print('hi')\n", "bot.py", tmp, "carol", sandbox=spec)
+            dir_mode = stat.S_IMODE(tmp.stat().st_mode)
+            py_mode = stat.S_IMODE((tmp / "carol.py").stat().st_mode)
+            sdk_mode = stat.S_IMODE((tmp / "starship_sdk.py").stat().st_mode)
+            self.assertTrue(dir_mode & 0o001, f"dir not o+x: {oct(dir_mode)}")
+            self.assertTrue(py_mode & 0o004, f"bot not o+r: {oct(py_mode)}")
+            self.assertTrue(sdk_mode & 0o004, f"sdk not o+r: {oct(sdk_mode)}")
+        finally:
+            os.umask(old)
+
     def test_disabled_sandbox_is_plain_argv(self):
         spec = SandboxSpec(mode="none")
         tmp = Path(tempfile.mkdtemp()) / "bob"
