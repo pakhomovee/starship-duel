@@ -88,7 +88,6 @@ async function boot() {
 
   $("#btn-new").onclick = newGame;
   $("#btn-reset").onclick = resetGame;
-  wireRules();
   wireGames();
   wireReplay();
   $("#btn-step").onclick = () => wsSend({ cmd: "step" });
@@ -106,17 +105,6 @@ async function boot() {
 }
 
 function speed() { return (1280 - Number($("#inp-speed").value)) / 1000; }
-
-// ---- rules modal -----------------------------------------------------------
-function wireRules() {
-  const overlay = $("#rules-overlay");
-  const open = () => { overlay.hidden = false; };
-  const close = () => { overlay.hidden = true; };
-  $("#btn-rules").onclick = open;
-  $("#btn-rules-close").onclick = close;
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
-}
 
 // ---- game lifecycle --------------------------------------------------------
 function syncPerspSeg(view) {

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starship Duel — Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css?v=10">
+<link rel="stylesheet" href="/static/rules.css?v=3">
+</head>
+<body>
+<div id="sprite-host" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-kicker">Field Guide</span>
+    <h1>Starship&nbsp;Duel</h1>
+  </div>
+  <div class="setup">
+    <a href="/" class="btn btn-primary" title="Play a game">◀ Play</a>
+    <a href="/tournament" class="btn btn-ghost" title="Bot ladder & leaderboard">Tournament ♛</a>
+  </div>
+</header>
+
+<main class="guide">
+
+  <!-- HERO ------------------------------------------------------------------->
+  <section class="hero">
+    <div class="kicker">A hidden-information duel</div>
+    <h1>Learn to hunt in the dark</h1>
+    <p class="lede">Two ships fight across a network of star systems. It's 1v1, turn by turn,
+      zero-sum — and your exact location is <b>invisible</b> to your rival unless something
+      gives you away. Score the map, hunt the rival down, or outlast the collapse.</p>
+    <div class="tagset">
+      <span class="tag">👁 Fog of war</span>
+      <span class="tag">🎯 3 ways to win</span>
+      <span class="tag">🛰 Unlockable kit</span>
+      <span class="tag">💥 A shrinking arena</span>
+    </div>
+  </section>
+
+  <!-- WIN CONDITIONS --------------------------------------------------------->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num">01 · Objective</div>
+      <h2>Three ways to win</h2>
+      <p>You can't just hide — every path to victory means leaving cover at the right moment.</p>
+    </div>
+    <div class="win-grid">
+      <div class="win-card">
+        <div class="emblem">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%">
+            <svg viewBox="0 0 64 64" style="width:40px;height:40px"><use href="#res-domination"/></svg>
+            <div class="dom-bar"><i></i></div>
+          </div>
+        </div>
+        <h3><span class="dot" style="background:var(--gold)"></span>Domination</h3>
+        <p>At the start of each turn you bank <b>control points</b> equal to your income —
+          <b>+1</b> per single-star system you own, <b>+4</b> per binary. First to fill the
+          <b>CONTROL</b> bar wins on points.</p>
+      </div>
+      <div class="win-card">
+        <div class="emblem">
+          <div class="hearts">
+            <svg viewBox="0 0 24 24"><use href="#hud-life-filled"/></svg>
+            <svg viewBox="0 0 24 24"><use href="#hud-life-filled"/></svg>
+            <svg viewBox="0 0 24 24" class="drain"><use href="#hud-life-filled"/></svg>
+          </div>
+        </div>
+        <h3><span class="dot" style="background:var(--p1-bright)"></span>Elimination</h3>
+        <p>A landed <b>Fire</b> is a <b>raid</b>: it steals points, <b>captures</b> the system, and
+          costs the rival a <b>life</b> (they respawn hidden). Take all <b>3 lives</b> and you win
+          the hunt.</p>
+      </div>
+      <div class="win-card">
+        <div class="emblem">
+          <svg viewBox="0 0 160 160" style="width:76px;height:76px"><use href="#sys-single-supernova"/></svg>
+        </div>
+        <h3><span class="dot" style="background:var(--danger)"></span>Collapse</h3>
+        <p>The arena shrinks: systems go <b>supernova</b> from the outside in. Anyone caught on a
+          dying star is destroyed — outlast a rival who couldn't evacuate in time.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- A TURN ----------------------------------------------------------------->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num">02 · Economy</div>
+      <h2>Anatomy of a turn</h2>
+      <p>Ships alternate turns. Each turn is a small budget of actions fuelled by the territory you hold.</p>
+    </div>
+    <div class="split">
+      <div class="panel-card">
+        <h3>What you get</h3>
+        <ul>
+          <li><b>2 actions</b> every turn — plus any you banked with <b>Overcharge</b>.</li>
+          <li><b>Energy income</b> at turn start from systems you own: <b>+1</b> single-star, <b>+4</b> binary.</li>
+          <li>Actions beyond the base 2 <b>carry over</b>; the base 2 do not — so spare tempo is never wasted.</li>
+          <li>The second mover starts with a small <b>komi</b> handicap so going first isn't an unfair edge.</li>
+        </ul>
+      </div>
+      <div class="panel-card">
+        <h3>What you spend it on</h3>
+        <p>Actions come in three families — the gallery below shows each one in motion:</p>
+        <ul>
+          <li><b>Move &amp; hold</b> — reposition and duck back under cloak (free).</li>
+          <li><b>Score &amp; strike</b> — Claim territory and Fire raids.</li>
+          <li><b>Tools &amp; unlocks</b> — Energy-priced recon, cloak, and permanent upgrades.</li>
+        </ul>
+        <p class="hint" style="margin-top:8px">Crash your bot or run out of time and you forfeit.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACTION GALLERY --------------------------------------------------------->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num">03 · The playbook</div>
+      <h2>Every action, in motion</h2>
+      <p>These are live previews built from the game's own art — tap any scene to replay it.</p>
+    </div>
+
+    <div class="gallery">
+
+      <div class="gallery-band"><span>Move &amp; position — free</span></div>
+
+      <!-- JUMP -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-jump" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <line x1="66" y1="82" x2="170" y2="82" stroke="#6b5ca8" stroke-width="2.5" stroke-dasharray="2 9" stroke-linecap="round" opacity="0.4"/>
+            <use href="#sys-single-stable" x="29" y="45" width="74" height="74"/>
+            <use href="#sys-single-stable" x="133" y="45" width="74" height="74"/>
+            <g class="s-ship">
+              <use href="#ship-warm-flame" class="s-flame" x="44" y="57" width="44" height="44"/>
+              <use href="#ship-warm" x="44" y="52" width="44" height="44"/>
+            </g>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-jump"/></svg>
+            <h3>Jump</h3><span class="cost move">move</span>
+          </div>
+          <p>Hop to an adjacent system along a lane.</p>
+          <p class="note"><b>Watch out:</b> entering a rival-claimed or rival-occupied system can expose your position.</p>
+        </div>
+      </div>
+
+      <!-- HOLD -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-hold" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#sys-single-stable" x="82" y="46" width="76" height="76"/>
+            <use href="#fx-cloak" class="s-aura" x="87" y="41" width="66" height="66"/>
+            <use href="#ship-warm" class="s-ship" x="97" y="51" width="46" height="46"/>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-hold"/></svg>
+            <h3>Hold</h3><span class="cost move">move</span>
+          </div>
+          <p>Stay put and slip back under cloak.</p>
+          <p class="note">The way to <b>disappear again</b> after you've been spotted.</p>
+        </div>
+      </div>
+
+      <div class="gallery-band"><span>Score &amp; strike</span></div>
+
+      <!-- CLAIM -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-claim" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#sys-single-stable" x="83" y="49" width="74" height="74"/>
+            <use href="#ring-neutral" class="s-neutral" x="83" y="49" width="74" height="74"/>
+            <use href="#ring-owned-p1" class="s-own" x="83" y="49" width="74" height="74"/>
+            <use href="#ship-warm" x="83" y="57" width="42" height="42"/>
+            <use href="#flag-p1" class="s-flag" x="128" y="52" width="44" height="44"/>
+            <use href="#fx-exposed" class="s-expose c" x="88" y="48" width="32" height="32"/>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-claim"/></svg>
+            <h3>Claim</h3><span class="cost move">move</span>
+          </div>
+          <p>Take the system you're standing on for income — even one the rival owns.</p>
+          <p class="note"><b>Watch out:</b> claiming <b>exposes</b> you (unless deep-cloaked or jamming).</p>
+        </div>
+      </div>
+
+      <!-- FIRE -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-fire" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#sys-single-stable" x="83" y="49" width="74" height="74"/>
+            <use href="#ring-owned-p2" class="s-ownp2" x="83" y="49" width="74" height="74"/>
+            <use href="#ring-owned-p1" class="s-ownp1" x="83" y="49" width="74" height="74"/>
+            <use href="#ship-warm" x="80" y="66" width="40" height="40"/>
+            <use href="#ship-cool" class="s-rival c" x="112" y="52" width="42" height="42"/>
+            <use href="#act-fire" class="s-reticle c" x="107" y="47" width="52" height="52"/>
+            <use href="#fx-hit" class="s-hit c" x="104" y="44" width="58" height="58"/>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-fire"/></svg>
+            <h3>Fire</h3><span class="cost">3 ⚡</span>
+          </div>
+          <p>Raid your current system. On a hit: <b>steal points</b>, <b>capture</b> the ground, cost the rival a <b>life</b>.</p>
+          <p class="note">Charged whether it lands or misses, so blind spam self-punishes. A <b>deep-cloaked</b> rival is immune.</p>
+        </div>
+      </div>
+
+      <div class="gallery-band"><span>Recon, cloak &amp; tempo — Energy-priced</span></div>
+
+      <!-- SCAN -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-scan" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#sys-single-stable" x="21" y="49" width="70" height="70"/>
+            <use href="#ship-warm" x="35" y="57" width="42" height="42"/>
+            <use href="#fx-scan-ping" class="s-ping c" x="20" y="42" width="72" height="72"/>
+            <use href="#sys-single-stable" x="145" y="49" width="70" height="70"/>
+            <use href="#marker-candidate" class="s-cand c" x="153" y="51" width="54" height="54"/>
+            <use href="#ship-cool" class="s-rival c" x="158" y="56" width="44" height="44"/>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-scan"/></svg>
+            <h3>Scan</h3><span class="cost free">free</span>
+          </div>
+          <p>Sweep the ownership map and <b>pin the rival's exact system</b>.</p>
+          <p class="note">Pure tempo — the read you want before committing a raid. Beaten by <b>Deep Cloak</b>.</p>
+        </div>
+      </div>
+
+      <!-- DEEP CLOAK -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-cloak" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#sys-single-stable" x="83" y="47" width="74" height="74"/>
+            <use href="#ring-owned-p2" x="83" y="47" width="74" height="74"/>
+            <use href="#fx-cloak" class="s-aura" x="87" y="41" width="66" height="66"/>
+            <use href="#ship-warm" class="s-ship" x="97" y="51" width="46" height="46"/>
+            <use href="#fx-scan-ping" class="s-ping c" x="77" y="31" width="86" height="86"/>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-cloak"/></svg>
+            <h3>Deep Cloak</h3><span class="cost">14 ⚡</span>
+          </div>
+          <p>Become <b>undetectable for 2 turns</b> — immune to every reveal, raid, and life loss.</p>
+          <p class="note">Sit in enemy territory undisturbed (the rival's Scan sweeps right past you) and punch a raid through radar.</p>
+        </div>
+      </div>
+
+      <!-- OVERCHARGE -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-oc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#pip-action" x="45" y="50" width="42" height="42"/>
+            <use href="#pip-action" x="87" y="50" width="42" height="42"/>
+            <text x="140" y="79" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="24" fill="#9a8fd0">+</text>
+            <use href="#res-overcharge" class="s-pip3 c" x="149" y="48" width="46" height="46"/>
+            <text x="87" y="116" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#9a8fd0">base 2</text>
+            <text x="172" y="116" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#ff8a3c">banked +1</text>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-overcharge"/></svg>
+            <h3>Overcharge</h3><span class="cost">6 ⚡</span>
+          </div>
+          <p>Bank <b>+1 extra action</b> for next turn (it stacks).</p>
+          <p class="note">Cheap enough to snowball a lead — buy the tempo to claim twice in a turn.</p>
+        </div>
+      </div>
+
+      <!-- END TURN (small companion) -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-hold" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#hud-timer" x="90" y="40" width="60" height="60"/>
+            <use href="#pip-action" class="s-aura" x="150" y="52" width="34" height="34"/>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#hud-timer"/></svg>
+            <h3>End Turn</h3><span class="cost move">free</span>
+          </div>
+          <p>Stop early on purpose.</p>
+          <p class="note">Any actions beyond the base 2 left unspent are <b>banked</b> for next turn.</p>
+        </div>
+      </div>
+
+      <div class="gallery-band"><span>Permanent unlocks — buy once, keep forever</span></div>
+
+      <!-- PROXIMITY ALERT -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-prox" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#sys-single-stable" x="120" y="48" width="72" height="72"/>
+            <use href="#ring-owned-p1" x="120" y="48" width="72" height="72"/>
+            <use href="#fx-shield-radar" class="s-shield" x="106" y="22" width="100" height="100"/>
+            <use href="#ship-warm" x="135" y="57" width="42" height="42"/>
+            <g class="s-rival">
+              <use href="#ship-cool" x="66" y="60" width="40" height="40"/>
+              <use href="#fx-exposed" class="s-alert c" x="71" y="51" width="30" height="30"/>
+            </g>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-unlock-proximity"/></svg>
+            <h3>Proximity Alert</h3><span class="cost unlock">6 ⚡ · unlock</span>
+          </div>
+          <p><b>Defensive.</b> A <b>capture shield</b> on your ship's system plus a short-range alarm that <b>pierces cloak</b>.</p>
+          <p class="note">Early warning of an incoming raid — the rival lights up as they close in.</p>
+        </div>
+      </div>
+
+      <!-- LONG-RANGE SCANNERS -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-lrs" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <use href="#sys-single-stable" x="20" y="54" width="64" height="64"/>
+            <use href="#ship-warm" x="31" y="63" width="42" height="42"/>
+            <circle class="s-sweep1" cx="52" cy="84" r="44" fill="none" stroke="#5ce0ff" stroke-width="2.5" stroke-dasharray="4 8"/>
+            <circle class="s-sweep2" cx="52" cy="84" r="70" fill="none" stroke="#5ce0ff" stroke-width="2.5" stroke-dasharray="4 9"/>
+            <g class="s-track">
+              <use href="#ship-cool" x="130" y="60" width="40" height="40"/>
+              <use href="#act-fire" x="133" y="55" width="34" height="34"/>
+            </g>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-unlock-scanners"/></svg>
+            <h3>Long-Range Scanners</h3><span class="cost unlock">10 ⚡ · unlock</span>
+          </div>
+          <p><b>Offensive.</b> Passively <b>track the rival</b> while they're within range, and see ownership two hops out.</p>
+          <p class="note">Line up capture-raids without spending a Scan every turn. Also beaten by <b>Deep Cloak</b>.</p>
+        </div>
+      </div>
+
+      <!-- JAMMING -->
+      <div class="act-card">
+        <div class="scene-wrap">
+          <svg class="scene scene-jam" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+            <text x="120" y="34" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#9a8fd0" letter-spacing="1">RIVAL SEES…</text>
+            <use href="#act-cloak" class="s-real c" x="92" y="56" width="56" height="56"/>
+            <use href="#fx-spent-energy" class="s-generic c" x="90" y="54" width="60" height="60"/>
+            <text class="s-q" x="120" y="132" text-anchor="middle" font-family="Baloo 2, sans-serif" font-weight="800" font-size="18" fill="#c9beff">“spent Energy”</text>
+          </svg>
+          <span class="replay-hint">↻ replay</span>
+        </div>
+        <div class="act-body">
+          <div class="act-title">
+            <svg class="ic" viewBox="0 0 64 64"><use href="#act-unlock-jamming"/></svg>
+            <h3>Jamming</h3><span class="cost unlock">8 ⚡ · unlock</span>
+          </div>
+          <p>Your Energy actions show to the rival only as a generic <b>“spent Energy”</b>.</p>
+          <p class="note">Claims go silent and it <b>blinds their Proximity Alert</b> — hide your whole strategy.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- KIT COUNTERS + FOG ----------------------------------------------------->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num">04 · Mind games</div>
+      <h2>Information is the real weapon</h2>
+      <p>The whole duel is a bluff over where you are and what you're building.</p>
+    </div>
+    <div class="split">
+      <div class="panel-card">
+        <h3>Fog of war</h3>
+        <p>You start <b>cloaked</b>. The rival only ever sees a “could-be-here” cloud — and the
+          ownership map is <b>fogged</b>, so a Claim you make while deep-cloaked expands your empire
+          <b>invisibly</b>. A well-placed Scan tears the fog away:</p>
+        <svg class="scene scene-fog" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+          <use href="#sys-single-stable" class="dim" x="82" y="46" width="76" height="76"/>
+          <use href="#ring-fogged" class="s-fog" x="82" y="46" width="76" height="76"/>
+          <g class="s-real">
+            <use href="#ring-owned-p2" x="82" y="46" width="76" height="76"/>
+            <use href="#flag-p2" x="130" y="56" width="40" height="40"/>
+          </g>
+          <use href="#fx-scan-ping" class="s-ping c" x="80" y="38" width="80" height="80"/>
+        </svg>
+      </div>
+      <div class="panel-card">
+        <h3>Kit counters</h3>
+        <p>The three unlocks form a rock-paper-scissors — the read on your rival's kit tells you which one to buy:</p>
+        <div class="counters">
+          <div class="counter-row">
+            <span class="who"><svg viewBox="0 0 64 64"><use href="#act-cloak"/></svg>Deep&nbsp;Cloak</span>
+            <span class="beats">beats ▶</span>
+            <span class="foe">Scan &amp; Scanners</span>
+          </div>
+          <div class="counter-row">
+            <span class="who"><svg viewBox="0 0 64 64"><use href="#act-unlock-proximity"/></svg>Proximity&nbsp;Alert</span>
+            <span class="beats">beats ▶</span>
+            <span class="foe">Deep Cloak</span>
+          </div>
+          <div class="counter-row">
+            <span class="who"><svg viewBox="0 0 64 64"><use href="#act-unlock-jamming"/></svg>Jamming</span>
+            <span class="beats">beats ▶</span>
+            <span class="foe">Proximity Alert</span>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:10px">Energy caches sit on the map and grow in value — but you
+          collect one only by <b>starting your turn on it</b>, which exposes you. Risk for reward.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- COLLAPSE --------------------------------------------------------------->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num">05 · The clock</div>
+      <h2>The collapse forces a finish</h2>
+      <p>No stalling to a draw — the arena eats itself until the two of you have nowhere left to hide.</p>
+    </div>
+    <div class="split">
+      <div class="panel-card">
+        <h3>Read the warnings</h3>
+        <p>From about turn 24, systems collapse from the outside in toward a random surviving
+          <b>“eye”</b>. A system first <b>destabilizes</b> — a visible ⚠ countdown giving you a few
+          turns to evacuate — then goes <b>supernova</b>. Anyone still standing on it is destroyed.</p>
+        <p>Both ships get squeezed together, so every game resolves and hiding forever isn't a plan.</p>
+        <div class="legend">
+          <span class="item"><svg viewBox="0 0 160 160"><use href="#sys-single-stable"/></svg>Stable</span>
+          <span class="item"><svg viewBox="0 0 160 160"><use href="#sys-single-destabilizing"/></svg>Destabilizing</span>
+          <span class="item"><svg viewBox="0 0 160 160"><use href="#sys-single-supernova"/></svg>Supernova</span>
+        </div>
+      </div>
+      <div class="panel-card">
+        <h3>A star dies</h3>
+        <p>Watch the outer system decay while the eye holds — and evacuate before you're caught:</p>
+        <svg class="scene scene-nova" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet">
+          <line x1="72" y1="82" x2="176" y2="82" stroke="#6b5ca8" stroke-width="2.5" stroke-dasharray="2 9" stroke-linecap="round" opacity="0.4"/>
+          <use href="#sys-single-stable" x="38" y="48" width="68" height="68"/>
+          <text x="72" y="132" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="11" fill="#9a8fd0">the eye</text>
+          <use href="#sys-single-stable" class="s-stable" x="142" y="48" width="68" height="68"/>
+          <use href="#sys-single-destabilizing" class="s-warn" x="142" y="48" width="68" height="68"/>
+          <use href="#sys-single-supernova" class="s-nova" x="142" y="48" width="68" height="68"/>
+          <use href="#ship-warm" class="s-drift" x="100" y="52" width="40" height="40"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <div class="backlink">
+    <a href="/" class="btn btn-primary">▶ Start a game</a>
+    <a href="/tournament" class="btn btn-ghost">Enter a bot ♛</a>
+  </div>
+
+</main>
+
+<script src="/static/rules.js?v=3"></script>
+</body>
+</html>

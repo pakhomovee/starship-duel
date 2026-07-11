@@ -1,0 +1,267 @@
+/* ============================================================================
+   Rules / field guide page.  Reuses the tokens, fonts and sprite sheet from the
+   game (styles.css + sprites.svg); everything here is layout for the guide plus
+   the looping "preview" scenes that show each action the way it looks in play.
+   ========================================================================== */
+
+/* The shared body background (styles.css) anchors its radial glow to the top of
+   the whole document, so on this long page its fading arc scrolls across text
+   mid-page and reads as a seam.  Override with a fixed, viewport-anchored glow so
+   the backdrop stays smooth and uniform behind every section. */
+body {
+  background:
+    radial-gradient(1200px 720px at 50% -6%, #241452 0%, transparent 60%),
+    #09061c;
+  background-attachment: fixed;
+}
+
+.guide {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 8px 24px 96px;
+}
+
+/* ---------- hero ---------- */
+.hero {
+  text-align: center;
+  padding: 40px 12px 28px;
+}
+.hero .kicker {
+  font: 800 12px 'Nunito'; letter-spacing: 4px; color: var(--cyan);
+  text-transform: uppercase;
+}
+.hero h1 {
+  font-family: 'Baloo 2'; font-weight: 800; font-size: clamp(34px, 6vw, 58px);
+  margin: 8px 0 6px; letter-spacing: .5px;
+  background: linear-gradient(180deg, #fff, var(--violet-soft));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero .lede {
+  max-width: 640px; margin: 0 auto; font-size: 17px; line-height: 1.6;
+  color: var(--violet-soft);
+}
+.hero .tagset { margin-top: 18px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.tag {
+  font: 700 12px 'Nunito'; padding: 6px 13px; border-radius: 999px;
+  background: #ffffff10; border: 1px solid #ffffff1f; color: var(--text);
+}
+
+/* ---------- section scaffolding ---------- */
+.sec { margin-top: 56px; }
+.sec-head { text-align: center; margin-bottom: 22px; }
+.sec-head h2 {
+  font-family: 'Baloo 2'; font-weight: 800; font-size: 26px; margin: 0 0 6px;
+}
+.sec-head p { margin: 0 auto; max-width: 560px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.sec-head .num {
+  display: inline-block; font: 800 12px 'Nunito'; letter-spacing: 3px;
+  color: var(--cyan); text-transform: uppercase; margin-bottom: 6px;
+}
+
+/* ---------- win-condition cards ---------- */
+.win-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 820px) { .win-grid { grid-template-columns: 1fr; } }
+.win-card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid #ffffff1a; border-radius: 18px; padding: 20px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.win-card .emblem { height: 96px; display: flex; align-items: center; justify-content: center; }
+.win-card h3 { font-family: 'Baloo 2'; font-weight: 800; font-size: 19px; margin: 0; }
+.win-card h3 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+.win-card p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--violet-soft); }
+
+/* domination bar */
+.dom-bar { width: 100%; height: 16px; border-radius: 999px; background: #ffffff12; overflow: hidden; border: 1px solid #ffffff1a; }
+.dom-bar > i { display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), #ffb347); animation: barFill 3.4s ease-in-out infinite alternate; }
+@keyframes barFill { from { width: 12%; } to { width: 86%; } }
+.hearts { display: flex; gap: 8px; }
+.hearts svg { width: 30px; height: 30px; }
+.hearts .drain { animation: heartDrain 3s ease-in-out infinite; }
+@keyframes heartDrain { 0%, 45% { opacity: 1; } 60%, 100% { opacity: .12; } }
+
+/* ---------- the action gallery ---------- */
+.gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+@media (max-width: 720px) { .gallery { grid-template-columns: 1fr; } }
+.act-card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid #ffffff1a; border-radius: 18px; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.act-card .scene-wrap { position: relative; cursor: pointer; }
+.act-card .scene {
+  display: block; width: 100%; height: auto; aspect-ratio: 240 / 150;
+  background:
+    radial-gradient(600px 260px at 50% -30%, #2a1a5e55, transparent 60%),
+    radial-gradient(circle at 18% 82%, #5ce0ff12, transparent 45%),
+    #0a0722;
+  border-bottom: 1px solid #ffffff14;
+}
+.scene-wrap .replay-hint {
+  position: absolute; right: 10px; bottom: 8px; font: 700 10px 'Nunito';
+  color: var(--muted); letter-spacing: .5px; opacity: 0; transition: opacity .15s;
+  pointer-events: none; background: #0008; padding: 3px 7px; border-radius: 999px;
+}
+.scene-wrap:hover .replay-hint { opacity: 1; }
+.act-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+.act-title { display: flex; align-items: center; gap: 10px; }
+.act-title .ic { width: 26px; height: 26px; flex: none; }
+.act-title h3 { font-family: 'Baloo 2'; font-weight: 800; font-size: 17px; margin: 0; flex: 1; }
+.cost {
+  font: 800 12px 'Nunito'; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  background: #123a52; color: var(--cyan); border: 1px solid #5ce0ff44;
+}
+.cost.free { background: #16351f; color: #7ee08a; border-color: #7ee08a44; }
+.cost.move { background: #ffffff10; color: var(--muted); border-color: #ffffff22; }
+.cost.unlock { background: #3a1c12; color: #ffb347; border-color: #ff8a3c44; }
+.act-body p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--violet-soft); }
+.act-body .note { font-size: 12px; color: var(--muted); }
+.act-body .note b { color: var(--gold); }
+.act-card.span2 { grid-column: 1 / -1; }
+.act-card.span2 .act-inner { display: grid; grid-template-columns: 300px 1fr; }
+@media (max-width: 720px) { .act-card.span2 .act-inner { grid-template-columns: 1fr; } }
+
+/* section label chip inside the gallery flow */
+.gallery-band {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 12px;
+  margin: 8px 2px 0;
+}
+.gallery-band::before, .gallery-band::after { content: ""; height: 1px; flex: 1; background: #ffffff14; }
+.gallery-band span { font: 800 11px 'Nunito'; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+
+/* ---------- fog / counters / collapse blocks ---------- */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: stretch; }
+@media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
+.panel-card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid #ffffff1a; border-radius: 18px; padding: 18px 20px;
+}
+.panel-card h3 { font-family: 'Baloo 2'; font-weight: 800; font-size: 18px; margin: 0 0 8px; }
+.panel-card p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.6; color: var(--violet-soft); }
+.panel-card .scene { border-radius: 12px; border: 1px solid #ffffff14; margin-top: 10px; }
+.panel-card ul { margin: 6px 0 0; padding-left: 18px; }
+.panel-card li { font-size: 13px; line-height: 1.55; color: var(--violet-soft); margin: 3px 0; }
+.panel-card b { color: var(--text); }
+
+/* counters triangle */
+.counters { display: flex; flex-direction: column; gap: 10px; }
+.counter-row {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
+  background: #ffffff08; border: 1px solid #ffffff14; border-radius: 12px; padding: 10px 14px;
+}
+.counter-row .who { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13.5px; }
+.counter-row .who svg { width: 24px; height: 24px; }
+.counter-row .beats { font: 800 12px 'Nunito'; color: var(--danger); text-align: center; letter-spacing: .5px; }
+.counter-row .foe { color: var(--muted); font-weight: 700; text-align: right; font-size: 13px; }
+
+/* map legend row */
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; }
+.legend .item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--violet-soft); }
+.legend .item svg { width: 30px; height: 30px; }
+
+.backlink { display: flex; justify-content: center; margin-top: 48px; gap: 12px; }
+
+/* ============================================================================
+   PREVIEW SCENES — shared plumbing
+   Animations only attach once the scene is scrolled into view (rules.js adds
+   .in-view); removing/re-adding that class replays a scene from frame 0, which
+   is what the click-to-replay uses.  Elements that scale carry .c.
+   ========================================================================== */
+.scene { --sd: 5s; }            /* shared scene timeline; the playhead tracks it */
+.c { transform-box: fill-box; transform-origin: center; }
+.dim { opacity: .5; }
+
+/* playhead: a thin bar under each gallery scene showing where the loop is,
+   so the start/end of a loop is never ambiguous (injected by rules.js). */
+.scene-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #ffffff12; }
+.scene-progress > i { display: block; height: 100%; width: 0; border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg, var(--cyan), var(--violet)); }
+.scene-wrap:has(.scene.in-view) .scene-progress > i { animation: playhead var(--sd, 5s) linear infinite; }
+
+/* keyframes shared across scenes --------------------------------------------
+   Every scene follows one readable rhythm on a shared timeline (--sd):
+     0-14%  hold the BEFORE state   (a clear starting frame)
+     14-46% the ACTION plays out
+     46-86% hold the AFTER/payoff   (the result you should read)
+     86-100% reset back to BEFORE
+   The playhead bar under each scene tracks this same timeline, so it is always
+   obvious where a loop begins and ends.                                       */
+@keyframes jumpHop   { 0%,10% { transform: translate(0,0); } 30% { transform: translate(52px,-26px); } 40%,64% { transform: translate(104px,0); } 76% { transform: translate(52px,-26px); } 84%,100% { transform: translate(0,0); } }
+@keyframes flameFlick{ 0%,100% { opacity: .5; transform: scaleY(.8); } 50% { opacity: 1; transform: scaleY(1.15); } }
+@keyframes auraIn    { 0%,10% { opacity: 0; } 26% { opacity: .9; } 42%,66% { opacity: .9; } 78%,100% { opacity: 0; } }
+@keyframes recloak   { 0%,10% { opacity: 1; } 40%,66% { opacity: .28; } 80%,100% { opacity: 1; } }
+@keyframes ownFade   { 0%,12% { opacity: 0; } 40%,66% { opacity: 1; } 80%,100% { opacity: 0; } }
+@keyframes fadeOut   { 0%,12% { opacity: 1; } 40%,66% { opacity: 0; } 80%,100% { opacity: 1; } }
+@keyframes flagRise  { 0%,12% { opacity: 0; transform: translateY(14px); } 40%,66% { opacity: 1; transform: translateY(0); } 80%,100% { opacity: 0; transform: translateY(14px); } }
+@keyframes flash     { 0%,14% { opacity: 0; transform: scale(.4); } 26% { opacity: 1; transform: scale(1); } 40% { opacity: 0; transform: scale(1.35); } 100% { opacity: 0; } }
+@keyframes reticleIn { 0%,12% { opacity: 0; transform: scale(1.7); } 24%,32% { opacity: 1; transform: scale(1); } 44%,100% { opacity: 0; } }
+@keyframes hitBurst  { 0%,34% { opacity: 0; transform: scale(.3) rotate(0deg); } 46% { opacity: 1; transform: scale(1.1) rotate(18deg); } 60% { opacity: 0; transform: scale(1.6) rotate(30deg); } 100% { opacity: 0; } }
+@keyframes rivalDown { 0%,32% { opacity: 1; transform: translate(0,0) scale(1); } 48% { opacity: 0; transform: translate(14px,-10px) scale(.5); } 70% { opacity: 0; } 80%,100% { opacity: 1; transform: translate(0,0) scale(1); } }
+@keyframes ping      { 0%,10% { opacity: 0; transform: scale(.25); } 18% { opacity: .95; transform: scale(.5); } 40% { opacity: 0; transform: scale(1.9); } 100% { opacity: 0; } }
+@keyframes pingLate  { 0%,42% { opacity: 0; transform: scale(.25); } 50% { opacity: .9; transform: scale(.5); } 70% { opacity: 0; transform: scale(1.9); } 100% { opacity: 0; } }
+@keyframes candOut   { 0%,24% { opacity: 1; } 42%,66% { opacity: 0; } 80%,100% { opacity: 1; } }
+@keyframes revealIn  { 0%,26% { opacity: 0; transform: scale(.6); } 42%,66% { opacity: 1; transform: scale(1); } 80%,100% { opacity: 0; } }
+@keyframes deepFade  { 0%,10% { opacity: 1; } 38%,66% { opacity: .28; } 80%,100% { opacity: 1; } }
+@keyframes pipIn     { 0%,26% { opacity: 0; transform: scale(.3); } 42% { opacity: 1; transform: scale(1.18); } 50%,66% { opacity: 1; transform: scale(1); } 80%,100% { opacity: 0; } }
+@keyframes approach  { 0%,12% { opacity: 0; transform: translateX(-46px); } 40%,66% { opacity: 1; transform: translateX(0); } 80%,100% { opacity: 0; transform: translateX(-46px); } }
+@keyframes sweepGlow { 0% { opacity: .15; } 50% { opacity: .9; } 100% { opacity: .15; } }
+@keyframes trackSlide{ 0%,100% { transform: translateX(-16px); } 50% { transform: translateX(18px); } }
+@keyframes swapOut   { 0%,10% { opacity: 1; } 40%,66% { opacity: 0; } 80%,100% { opacity: 1; } }
+@keyframes swapIn    { 0%,14% { opacity: 0; } 42%,66% { opacity: 1; } 80%,100% { opacity: 0; } }
+@keyframes qFloat    { 0%,18% { opacity: 0; transform: translateY(5px); } 42%,66% { opacity: 1; transform: translateY(0); } 80%,100% { opacity: 0; } }
+@keyframes novaSeq0  { 0%,16% { opacity: 1; } 30% { opacity: 0; } 78% { opacity: 0; } 88%,100% { opacity: 1; } }  /* stable held, decays, back for gap */
+@keyframes novaSeq1  { 0%,16% { opacity: 0; } 30%,44% { opacity: 1; } 56%,100% { opacity: 0; } }               /* destabilizing */
+@keyframes novaSeq2  { 0%,50% { opacity: 0; } 60%,72% { opacity: 1; } 80%,100% { opacity: 0; } }               /* supernova payoff */
+@keyframes driftGlow { 0%,14% { opacity: 1; transform: translate(0,0); } 50% { opacity: 1; transform: translate(-30px,-6px); } 66% { opacity: 0; transform: translate(-48px,-9px); } 80% { opacity: 0; } 88%,100% { opacity: 1; transform: translate(0,0); } }
+@keyframes playhead  { from { width: 0; } to { width: 100%; } }
+
+/* per-scene timings (attach only once .in-view, so replay restarts cleanly;
+   the beat scenes share --sd so the playhead bar tracks them exactly) ------- */
+.scene-jump.in-view .s-ship { animation: jumpHop var(--sd) ease-in-out infinite; }
+.scene-jump.in-view .s-flame { animation: flameFlick .3s ease-in-out infinite; transform-box: fill-box; transform-origin: top center; }
+
+.scene-hold.in-view .s-ship  { animation: recloak var(--sd) ease-in-out infinite; }
+.scene-hold.in-view .s-aura  { animation: auraIn var(--sd) ease-in-out infinite; }
+
+.scene-claim.in-view .s-own    { animation: ownFade var(--sd) ease-in-out infinite; }
+.scene-claim.in-view .s-neutral{ animation: fadeOut var(--sd) ease-in-out infinite; }
+.scene-claim.in-view .s-flag   { animation: flagRise var(--sd) ease-in-out infinite; transform-box: fill-box; transform-origin: bottom center; }
+.scene-claim.in-view .s-expose { animation: flash var(--sd) ease-in-out infinite; }
+
+.scene-fire.in-view .s-ownp2   { animation: fadeOut var(--sd) ease-in-out infinite; }
+.scene-fire.in-view .s-ownp1   { animation: ownFade var(--sd) ease-in-out infinite; }
+.scene-fire.in-view .s-reticle { animation: reticleIn var(--sd) ease-in-out infinite; }
+.scene-fire.in-view .s-hit     { animation: hitBurst var(--sd) ease-in-out infinite; }
+.scene-fire.in-view .s-rival   { animation: rivalDown var(--sd) ease-in-out infinite; }
+
+.scene-scan.in-view .s-ping    { animation: ping var(--sd) ease-out infinite; }
+.scene-scan.in-view .s-cand    { animation: candOut var(--sd) ease-in-out infinite; }
+.scene-scan.in-view .s-rival   { animation: revealIn var(--sd) ease-in-out infinite; }
+
+.scene-cloak.in-view .s-ship   { animation: deepFade var(--sd) ease-in-out infinite; }
+.scene-cloak.in-view .s-aura   { animation: auraIn var(--sd) ease-in-out infinite; }
+.scene-cloak.in-view .s-ping   { animation: pingLate var(--sd) ease-out infinite; }
+
+.scene-oc.in-view .s-pip3      { animation: pipIn var(--sd) ease-in-out infinite; }
+
+.scene-prox.in-view .s-shield  { animation: sweepGlow 2.4s ease-in-out infinite; }
+.scene-prox.in-view .s-rival   { animation: approach var(--sd) ease-in-out infinite; }
+.scene-prox.in-view .s-alert   { animation: flash var(--sd) ease-in-out infinite; }
+
+.scene-lrs.in-view .s-sweep1   { animation: sweepGlow 2.2s ease-in-out infinite; }
+.scene-lrs.in-view .s-sweep2   { animation: sweepGlow 2.2s ease-in-out infinite; animation-delay: .5s; }
+.scene-lrs.in-view .s-track    { animation: trackSlide 3.4s ease-in-out infinite; }
+
+.scene-jam.in-view .s-real     { animation: swapOut var(--sd) ease-in-out infinite; }
+.scene-jam.in-view .s-generic  { animation: swapIn var(--sd) ease-in-out infinite; }
+.scene-jam.in-view .s-q        { animation: qFloat var(--sd) ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+
+.scene-fog.in-view .s-fog      { animation: swapOut var(--sd) ease-in-out infinite; }
+.scene-fog.in-view .s-real     { animation: swapIn var(--sd) ease-in-out infinite; }
+.scene-fog.in-view .s-ping     { animation: ping var(--sd) ease-out infinite; }
+
+.scene-nova.in-view .s-stable  { animation: novaSeq0 var(--sd) ease-in-out infinite; }
+.scene-nova.in-view .s-warn    { animation: novaSeq1 var(--sd) ease-in-out infinite; }
+.scene-nova.in-view .s-nova    { animation: novaSeq2 var(--sd) ease-in-out infinite; }
+.scene-nova.in-view .s-drift   { animation: driftGlow var(--sd) ease-in-out infinite; }

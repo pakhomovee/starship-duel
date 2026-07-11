@@ -31,86 +31,9 @@
     <button id="btn-new" class="btn btn-primary">New Game</button>
     <button id="btn-games" class="btn btn-ghost" title="Browse & replay past games">Games ▤</button>
     <a href="/tournament" class="btn btn-ghost" title="Bot ladder & leaderboard">Tournament ♛</a>
-    <button id="btn-rules" class="btn btn-ghost" title="How to play">Rules ?</button>
+    <a href="/rules" class="btn btn-ghost" title="How to play — the field guide">Rules ?</a>
   </div>
 </header>
-
-<!-- Rules overview modal (opened via the Rules button) -->
-<div id="rules-overlay" class="modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rules-title">
-    <button id="btn-rules-close" class="modal-close" aria-label="Close">✕</button>
-    <h2 id="rules-title">How to play Starship Duel</h2>
-    <p class="modal-lead">Two ships duel across a network of star systems — hunt your rival
-      down while staying hidden yourself. 1v1, alternating turns, zero-sum, hidden information:
-      your exact location is invisible to your rival unless something reveals it.</p>
-
-    <h3>Three ways to win</h3>
-    <ul>
-      <li><b>Domination</b> — each turn you bank <b>control points</b> equal to your income from the
-        systems you own (single <b>+1</b>, binary <b>+4</b>). First to the target (the <b>CONTROL</b>
-        bar) wins on points. Income banks both Energy and points.</li>
-      <li><b>Elimination</b> — a landed <b>Fire</b> is a <b>raid</b>: it steals control points,
-        <b>captures</b> the system, and costs your rival a <b>life</b> (they respawn hidden). Take all
-        <b>3 lives</b> and you win the hunt.</li>
-      <li><b>Collapse</b> — outlast a rival caught on a dying star.</li>
-    </ul>
-    <p>You can't just hide: to score you must <b>Claim</b> territory and defend it. <b>Fog of war</b> —
-      you only see ownership of systems you've sensed, so a deep-cloaked Claim expands invisibly.
-      The second mover gets a small starting handicap (<b>komi</b>) for fairness. Crash your bot and
-      you forfeit.</p>
-
-    <h3>A turn</h3>
-    <ul>
-      <li>You get <b>2 actions</b> per turn (plus any you banked via Overcharge).</li>
-      <li>At turn start you earn <b>Energy</b> from systems you own: <b>+1</b> per single-star,
-        <b>+4</b> per binary system.</li>
-      <li>Leftover actions beyond the base 2 carry over to next turn; the base 2 do not.</li>
-    </ul>
-
-    <h3>Staying hidden</h3>
-    <p>You start <b>cloaked</b>. Certain actions <b>expose</b> you (reveal your exact system): an
-      uncloaked <b>Claim</b>, collecting a cache, firing, and entering rival space. <b>Hold</b> to
-      slip back under cloak. Your rival only ever sees a “could be here” set — and the ownership map
-      is <b>fogged</b>, so claims you make while deep-cloaked stay invisible to them.</p>
-
-    <h3>Actions</h3>
-    <table class="rules-table">
-      <tr><th>Action</th><th>Cost</th><th>Effect</th></tr>
-      <tr><td>Jump</td><td>—</td><td>Move to an adjacent system. Entering rival space can expose you.</td></tr>
-      <tr><td>Hold</td><td>—</td><td>Stay put and regain cloak.</td></tr>
-      <tr><td>Claim</td><td>—</td><td>Take the system you're on — even a rival's. Exposes you unless deep-cloaked/jamming.</td></tr>
-      <tr><td>Fire</td><td>3⚡</td><td><b>Raid</b>: on a hit, steal points, capture the system, cost the rival a life. Deep-cloak is immune.</td></tr>
-      <tr><td>Scan</td><td>free</td><td><b>Recon ping</b>: sweep the whole ownership map, and fix the rival — unless they're deep-cloaked.</td></tr>
-      <tr><td>Deep Cloak</td><td>14⚡</td><td>Undetectable for 2 turns — immune to every reveal, to raids, and to life loss.</td></tr>
-      <tr><td>Overcharge</td><td>6⚡</td><td>Bank +1 extra action for next turn (stacks).</td></tr>
-      <tr><td>Unlock: Proximity Alert</td><td>6⚡</td><td>Permanent: <b>capture shield</b> for your ship's system + a short-range alarm that pierces cloak.</td></tr>
-      <tr><td>Unlock: Long-Range Scanners</td><td>10⚡</td><td>Permanent: <b>ranged raid</b> (fire one hop away), 2-hop vision, passive rival tracking.</td></tr>
-      <tr><td>Unlock: Jamming</td><td>8⚡</td><td>Permanent: silent claims, blinds the rival's Proximity Alert, hides your Energy actions.</td></tr>
-    </table>
-    <p class="hint">Kit counters: <b>Deep Cloak</b> beats Scan/Scanners · <b>Proximity Alert</b> beats
-      Deep Cloak · <b>Jamming</b> beats Proximity Alert.</p>
-
-    <h3>Caches</h3>
-    <p>Energy caches appear on systems and grow in value over time. You collect one only by
-      <b>starting</b> your turn on it — which grants its Energy (or a banked Overcharge action) but
-      <b>exposes</b> you. Binaries pay more but are the busiest, most contested systems.</p>
-
-    <h3>The collapse</h3>
-    <p>To keep games decisive, the field shrinks: from ~turn 24, systems collapse from the outside
-      in toward a random surviving “eye”, roughly every few turns. A system first
-      <b>DESTABILIZES</b> — shown with a <span class="warn-inline">⚠ countdown</span> giving you a few
-      turns to evacuate — then goes <b>supernova</b>. Anyone still on it is destroyed, so both ships
-      are forced together and every game resolves.</p>
-
-    <h3>Reading the board</h3>
-    <ul>
-      <li>Orange = Player 1, blue = Player 2. A ship at half-opacity is cloaked.</li>
-      <li>Glowing rings mark systems you can jump to — click them to move.</li>
-      <li>Faint halos mark your rival's possible “could be here” systems.</li>
-      <li><b>Step</b> advances one bot action; <b>Auto</b> runs continuously; <b>Stop</b> pauses.</li>
-    </ul>
-  </div>
-</div>
 
 <!-- Past-games browser (opened via the Games button) -->
 <div id="games-overlay" class="modal-overlay" hidden>
