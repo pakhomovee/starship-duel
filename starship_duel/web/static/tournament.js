@@ -110,33 +110,67 @@ function renderStandings(body, data) {
     ? "updated " + new Date(data.computed * 1000).toLocaleString()
     : "not computed yet";
   if (!data.rows || !data.rows.length) {
-    body.append(el("p", "hint", "No decisive matches scored yet."));
+    body.append(el("p", "hint", "No matches scored yet."));
     return;
   }
-  const table = el("table", "board-table");
-  const head = el("tr");
-  ["#", "Competitor", "Score", "90% CI", "W–L", "Games"].forEach((h) => head.append(el("th", null, h)));
-  table.append(head);
   const BASES = ["random", "heuristic", "hunter", "uppo", "uppo-easy", "ppo-easy", "ppo-medium"];
-  for (const r of data.rows) {
-    const tr = el("tr");
-    const isBase = BASES.includes(r.id);
-    const rank = el("td", "rank");
-    if (RANK_ICON[r.rank]) rank.append(icon(RANK_ICON[r.rank], "rank-medal", 24));
-    rank.append(el("span", null, "#" + r.rank));
-    tr.append(rank);
-    const name = el("td");
-    name.append(icon("tour-bot", "row-avatar", 22));
-    name.append(el("b", null, r.id));
-    if (isBase) name.append(el("span", "badge", "baseline"));
-    tr.append(name);
-    tr.append(el("td", "num", fmt(r.score)));
-    tr.append(el("td", "num muted", `[${fmt(r.ci_low)}, ${fmt(r.ci_high)}]`));
-    tr.append(el("td", "num", `${r.wins}–${r.losses}`));
-    tr.append(el("td", "num muted", String(r.n_games)));
-    table.append(tr);
+  // Older snapshots have no `ranked` flag; treat a real rank as ranked.
+  const isRanked = (r) => (r.ranked !== undefined ? r.ranked : r.rank != null);
+  const ranked = data.rows.filter(isRanked);
+  const unranked = data.rows.filter((r) => !isRanked(r));
+
+  if (ranked.length) {
+    const table = el("table", "board-table");
+    const head = el("tr");
+    ["#", "Competitor", "Score", "90% CI", "W–L", "Games"].forEach((h) => head.append(el("th", null, h)));
+    table.append(head);
+    for (const r of ranked) {
+      const tr = el("tr");
+      const isBase = BASES.includes(r.id);
+      const rank = el("td", "rank");
+      if (RANK_ICON[r.rank]) rank.append(icon(RANK_ICON[r.rank], "rank-medal", 24));
+      rank.append(el("span", null, "#" + r.rank));
+      tr.append(rank);
+      const name = el("td");
+      name.append(icon("tour-bot", "row-avatar", 22));
+      name.append(el("b", null, r.id));
+      if (isBase) name.append(el("span", "badge", "baseline"));
+      tr.append(name);
+      tr.append(el("td", "num", fmt(r.score)));
+      tr.append(el("td", "num muted", `[${fmt(r.ci_low)}, ${fmt(r.ci_high)}]`));
+      tr.append(el("td", "num", `${r.wins}–${r.losses}`));
+      tr.append(el("td", "num muted", String(r.n_games)));
+      table.append(tr);
+    }
+    body.append(table);
   }
-  body.append(table);
+
+  // Competitors with no decisive game yet — shown so an entry never silently
+  // disappears, with the reason (all draws, still pending, or a launch error).
+  if (unranked.length) {
+    const wrap = el("div", "unranked");
+    wrap.append(el("h3", "unranked-head", "Not yet ranked"));
+    for (const r of unranked) {
+      const row = el("div", "sub-row");
+      row.append(icon("tour-bot", "row-avatar", 20));
+      row.append(el("b", null, r.id));
+      let why;
+      if (r.errored) why = `${r.errored} match${r.errored === 1 ? "" : "es"} failed to run`;
+      else if (r.n_games) why = `${r.draws || r.n_games} played, no decisive result yet`;
+      else if (r.pending) why = `${r.pending} match${r.pending === 1 ? "" : "es"} queued`;
+      else why = "no matches yet";
+      row.append(el("span", "badge badge-bad", why));
+      const games = (r.wins || 0) + (r.losses || 0) + (r.draws || 0);
+      if (games) row.append(el("span", "sub-when", `${r.wins}–${r.losses}–${r.draws} (W–L–D)`));
+      if (r.last_error) {
+        const msg = el("span", "sub-msg", "error: " + r.last_error);
+        msg.title = r.last_error;  // full text on hover
+        row.append(msg);
+      }
+      wrap.append(row);
+    }
+    body.append(wrap);
+  }
 }
 
 // ------------------------------------------------------- submissions ---------

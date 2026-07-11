@@ -212,6 +212,35 @@ class TournamentStore:
             ).fetchall()
         return [(r["a_id"], r["b_id"], r["result"]) for r in rows]
 
+    def competitor_match_stats(self) -> Dict[str, dict]:
+        """Per-competitor match tallies across ALL statuses, plus the latest error
+        text for any bot whose matches are failing.  Used by scoring so a
+        competitor whose games all error/draw still shows up (with a reason) rather
+        than silently vanishing from the standings."""
+        stats: Dict[str, dict] = {}
+
+        def _slot(cid: str) -> dict:
+            return stats.setdefault(
+                cid, {"pending": 0, "running": 0, "done": 0, "error": 0, "last_error": None})
+
+        with self._connect() as conn:
+            for r in conn.execute(
+                "SELECT a_id, b_id, status FROM matches"
+            ).fetchall():
+                st = r["status"]
+                for cid in (r["a_id"], r["b_id"]):
+                    slot = _slot(cid)
+                    if st in slot:
+                        slot[st] += 1
+            # Most recent error message per competitor (newest match wins).
+            for r in conn.execute(
+                "SELECT a_id, b_id, error FROM matches "
+                "WHERE status='error' AND error IS NOT NULL ORDER BY id ASC"
+            ).fetchall():
+                for cid in (r["a_id"], r["b_id"]):
+                    _slot(cid)["last_error"] = r["error"]
+        return stats
+
     # -- standings snapshots -------------------------------------------------
     def save_standings(self, scope: str, payload: list) -> None:
         with self._lock, self._connect() as conn:

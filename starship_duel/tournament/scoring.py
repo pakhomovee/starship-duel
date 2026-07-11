@@ -42,20 +42,33 @@ def _fit(n: int, comparisons: List[Comparison], alpha: float) -> np.ndarray:
 def compute_bt(store: TournamentStore, scope: str, *, alpha: float = 0.05,
                n_boot: int = 1000, ci: float = 0.90,
                seed: Optional[int] = 0) -> List[dict]:
-    """Fit BT over all finished matches and return ranked standings rows.
+    """Fit BT over all finished matches and return standings rows.
 
-    Each row: ``{id, score, rank, ci_low, ci_high, n_games, wins, losses}``.
-    Also persisted to the ``standings`` table under ``scope``.
+    EVERY active competitor gets a row, even one whose games all drew or errored:
+    such a bot is ``ranked=False`` (no decisive result to score) and carries its
+    ``errored``/``pending`` counts and ``last_error`` so an author can see *why*
+    it isn't competing, instead of silently vanishing from the ladder.
+
+    Each row: ``{id, score, rank, ranked, ci_low, ci_high, n_games, wins, losses,
+    draws, errored, pending, last_error}``.  Also persisted under ``scope``.
     """
     results = store.results_for_scoring()
     wins_by = _decisive(results)
+    match_stats = store.competitor_match_stats()
 
-    # Index the competitors that actually appear in decisive games.
-    ids = sorted({c for pair in wins_by for c in pair})
-    idx = {c: i for i, c in enumerate(ids)}
-    n = len(ids)
+    # The row set is every active competitor UNION anyone who has actually played
+    # a finished game (keeps historical results visible even if since deactivated).
+    active_ids = {c["id"] for c in store.list_competitors(active_only=True)}
+    played_ids = {c for (a, b, _) in results for c in (a, b)}
+    ids = sorted(active_ids | played_ids)
 
-    # Per-competitor bookkeeping over ALL finished games (incl. draws) for display.
+    # BT is fit only over competitors that appear in a DECISIVE game; the rest get
+    # a neutral score and are flagged unranked below.
+    decisive_ids = sorted({c for pair in wins_by for c in pair})
+    idx = {c: i for i, c in enumerate(decisive_ids)}
+    n = len(decisive_ids)
+
+    # Per-competitor bookkeeping over all finished games (incl. draws) for display.
     n_games = {c: 0 for c in ids}
     wins = {c: 0 for c in ids}
     losses = {c: 0 for c in ids}
@@ -71,17 +84,13 @@ def compute_bt(store: TournamentStore, scope: str, *, alpha: float = 0.05,
         if l in losses:
             losses[l] += 1
 
-    if n == 0:
-        store.save_standings(scope, [])
-        return []
-
     comparisons = [(idx[w], idx[l]) for (w, l) in wins_by]
-    params = _fit(n, comparisons, alpha)
+    params = _fit(n, comparisons, alpha) if n else np.zeros(0)
 
     # Bootstrap CIs: resample decisive games with replacement, refit.
     lo_q, hi_q = (1 - ci) / 2 * 100, (1 + ci) / 2 * 100
-    ci_low = dict.fromkeys(ids, 0.0)
-    ci_high = dict.fromkeys(ids, 0.0)
+    ci_low = dict.fromkeys(decisive_ids, 0.0)
+    ci_high = dict.fromkeys(decisive_ids, 0.0)
     if comparisons and n_boot > 0:
         rng = random.Random(seed)
         m = len(comparisons)
@@ -94,18 +103,34 @@ def compute_bt(store: TournamentStore, scope: str, *, alpha: float = 0.05,
         ci_low = {c: float(lows[i]) for c, i in idx.items()}
         ci_high = {c: float(highs[i]) for c, i in idx.items()}
 
-    rows = [{
-        "id": c,
-        "score": float(params[idx[c]]),
-        "ci_low": ci_low[c],
-        "ci_high": ci_high[c],
-        "n_games": n_games[c],
-        "wins": wins[c],
-        "losses": losses[c],
-    } for c in ids]
-    rows.sort(key=lambda r: r["score"], reverse=True)
-    for rank, r in enumerate(rows, start=1):
-        r["rank"] = rank
+    rows = []
+    for c in ids:
+        ranked = c in idx
+        ms = match_stats.get(c, {})
+        rows.append({
+            "id": c,
+            "ranked": ranked,
+            "score": float(params[idx[c]]) if ranked else 0.0,
+            "ci_low": ci_low[c] if ranked else 0.0,
+            "ci_high": ci_high[c] if ranked else 0.0,
+            "n_games": n_games[c],
+            "wins": wins[c],
+            "losses": losses[c],
+            "draws": n_games[c] - wins[c] - losses[c],
+            "errored": ms.get("error", 0),
+            "pending": ms.get("pending", 0) + ms.get("running", 0),
+            "last_error": ms.get("last_error"),
+        })
+
+    # Ranked competitors first (by score); unranked trail, ordered by games played.
+    rows.sort(key=lambda r: (r["ranked"], r["score"], r["n_games"]), reverse=True)
+    rank = 0
+    for r in rows:
+        if r["ranked"]:
+            rank += 1
+            r["rank"] = rank
+        else:
+            r["rank"] = None
 
     store.save_standings(scope, rows)
     return rows

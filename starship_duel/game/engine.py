@@ -502,6 +502,11 @@ class Engine:
         ship.energy -= self._cost(action.type)
         ship.unlocked[flag] = True
         events.append(f"ship{s} unlocks {flag}")
+        # Long-Range Scanners widens the sight radius to two hops; refresh the fog
+        # immediately so the newly-visible outer ring reveals its current owners
+        # this turn, instead of staying stale until the next turn's _start_turn.
+        if flag == "long_range_scanners":
+            self._observe_local(s)
 
     # --------------------------------------------------------- exposure/reveal
     def _see(self, observer: ShipId, system: System) -> None:

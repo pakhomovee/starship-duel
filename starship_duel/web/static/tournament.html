@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css?v=11">
-<link rel="stylesheet" href="/static/tournament.css?v=11">
+<link rel="stylesheet" href="/static/styles.css?v=12">
+<link rel="stylesheet" href="/static/tournament.css?v=12">
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -66,10 +66,10 @@
       <div class="admin-card">
         <h3>Create user</h3>
         <div class="row">
-          <input id="nu-name" placeholder="username">
-          <input id="nu-pass" type="password" placeholder="password">
-          <label class="chk"><input type="checkbox" id="nu-admin"> admin</label>
-          <button class="btn" id="nu-create">Create</button>
+          <input id="nu-name" placeholder="username" title="Login name for the new account (must be unique).">
+          <input id="nu-pass" type="password" placeholder="password" title="Initial password for the new account.">
+          <label class="chk" title="Grant this user admin rights (tournament control, user management, all submissions)."><input type="checkbox" id="nu-admin"> admin</label>
+          <button class="btn" id="nu-create" title="Create the account with the name and password above.">Create</button>
         </div>
         <span id="nu-result" class="hint"></span>
         <div id="users-list" class="mini-list"></div>
@@ -78,14 +78,14 @@
       <div class="admin-card">
         <h3>Tournament control</h3>
         <div class="row">
-          <label>Games each <input id="sched-n" type="number" value="10" min="1" style="width:70px"></label>
-          <button class="btn" id="sched-base">Schedule vs baselines</button>
-          <button class="btn" id="sched-full">Schedule full round-robin</button>
+          <label title="How many games to schedule per pairing (split evenly between who moves first).">Games each <input id="sched-n" type="number" value="10" min="1" style="width:70px"></label>
+          <button class="btn" id="sched-base" title="Queue matches of every active bot against the reference baselines (random, heuristic, hunter, uppo…). This is the cheap, continuous ladder that drives the Live standings. Idempotent: only tops each pairing up to “Games each”.">Schedule vs baselines</button>
+          <button class="btn" id="sched-full" title="Queue the full all-pairs round-robin between every active bot — the heavier post-deadline evaluation behind the Final standings. Idempotent: only adds the missing games.">Schedule full round-robin</button>
         </div>
         <div class="row">
-          <button class="btn" id="recompute-quick">Recompute live</button>
-          <button class="btn" id="recompute-full">Recompute final</button>
-          <span id="queue-status" class="hint"></span>
+          <button class="btn" id="recompute-quick" title="Re-fit the Bradley-Terry ratings over all finished matches and refresh the Live (partial) standings snapshot. Does not run any matches.">Recompute live</button>
+          <button class="btn" id="recompute-full" title="Re-fit ratings and refresh the Final (all-pairs) standings snapshot. Does not run any matches.">Recompute final</button>
+          <span id="queue-status" class="hint" title="Current match-queue state. “error” means matches that failed to run — check the “Not yet ranked” list in Standings for the reason."></span>
         </div>
         <span id="admin-msg" class="hint"></span>
       </div>
@@ -98,6 +98,6 @@
   </section>
 </main>
 
-<script src="/static/tournament.js?v=11"></script>
+<script src="/static/tournament.js?v=12"></script>
 </body>
 </html>
