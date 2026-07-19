@@ -75,7 +75,7 @@ async function boot() {
     let html = `<optgroup label="Built-in">`
       + (data.bots || []).map((b) => opt(b, b)).join("") + `</optgroup>`;
     if ((data.arena || []).length) {
-      html += `<optgroup label="Arena (external)">`
+      html += `<optgroup label="${data.arena_label || "Arena (external)"}">`
         + data.arena.map((a) => opt(a, a.replace("arena:", "") + " ⚙")).join("")
         + `</optgroup>`;
     }
@@ -85,6 +85,14 @@ async function boot() {
   $("#sel-ship1").innerHTML = opts();
   $("#sel-ship0").value = "human";
   $("#sel-ship1").value = "heuristic";
+
+  // Optional map picker (the local app's page has one; the hosted page doesn't).
+  const mapSel = $("#sel-map");
+  if (mapSel) {
+    const md = await (await fetch(api("/api/maps"))).json();
+    mapSel.innerHTML = `<option value="">random</option>`
+      + (md.maps || []).map((m) => opt(m, m)).join("");
+  }
 
   $("#btn-new").onclick = newGame;
   $("#btn-reset").onclick = resetGame;
@@ -125,6 +133,8 @@ async function newGame() {
     ship1: $("#sel-ship1").value,
     seed: $("#inp-seed").value === "" ? null : Number($("#inp-seed").value),
   };
+  const mapSel = $("#sel-map");
+  if (mapSel && mapSel.value) body.map_id = mapSel.value;
   const view = await postJSON("/api/game", body);
   onView(view);
   syncPerspSeg(view);     // human game -> your (fogged) seat; bot-vs-bot -> truth

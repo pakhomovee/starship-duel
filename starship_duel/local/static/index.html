@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starship Duel — Local</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css?v=10">
+<style>
+  /* local-app extras: forms + results table inside the shared modal chrome */
+  .brand-kicker.local { color: var(--p2-bright, #7dd3fc); }
+  .form-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center; margin: 12px 0; }
+  .form-grid label { font-weight: 700; font-size: 12px; color: var(--muted); }
+  .form-grid input, .form-grid select {
+    background: #ffffff10; border: 1px solid #ffffff2a; border-radius: 8px;
+    color: inherit; padding: 6px 8px; font: inherit; font-size: 13px; min-width: 0;
+  }
+  .form-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+  .form-check { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); font-weight: 700; }
+  .bot-entry { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted);
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bot-msg { font-size: 12px; margin-top: 4px; }
+  .bot-msg.ok { color: #7ce7a2; } .bot-msg.bad { color: var(--danger, #ff5c5c); }
+  .batch-bar { height: 10px; border-radius: 6px; background: #ffffff14; overflow: hidden; margin: 10px 0; }
+  .batch-fill { height: 100%; background: linear-gradient(90deg, var(--p1, #ffb26b), var(--p2-bright, #7dd3fc)); width: 0; transition: width .3s; }
+  .batch-summary { font-size: 14px; line-height: 1.6; }
+  .batch-summary b.p0 { color: var(--p1, #ffb26b); } .batch-summary b.p1 { color: var(--p2-bright, #7dd3fc); }
+  .batch-table-wrap { max-height: 260px; overflow: auto; margin-top: 10px; border: 1px solid #ffffff1c; border-radius: 10px; }
+  .batch-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .batch-table th, .batch-table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #ffffff12; }
+  .batch-table th { position: sticky; top: 0; background: #1a1442; font-size: 11px; color: var(--muted); }
+  .batch-table .w0 { color: var(--p1, #ffb26b); font-weight: 700; }
+  .batch-table .w1 { color: var(--p2-bright, #7dd3fc); font-weight: 700; }
+  .modal-foot { margin-top: 14px; font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+<!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
+<div id="sprite-host" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-kicker local">Local Test App</span>
+    <h1>Starship&nbsp;Duel</h1>
+  </div>
+  <div class="setup" id="setup">
+    <label>P1
+      <select id="sel-ship0"></select>
+    </label>
+    <label>P2
+      <select id="sel-ship1"></select>
+    </label>
+    <label>Map
+      <select id="sel-map"></select>
+    </label>
+    <label>Seed
+      <input id="inp-seed" type="number" placeholder="random" style="width:90px">
+    </label>
+    <button id="btn-new" class="btn btn-primary">New Game</button>
+    <button id="btn-batch" class="btn btn-ghost" title="Run many headless games and compare win rates">Test Run ⚔</button>
+    <button id="btn-mybots" class="btn btn-ghost" title="Register your solution files as bots">My Bots 🤖</button>
+    <button id="btn-games" class="btn btn-ghost" title="Browse & replay past games">Games ▤</button>
+    <a href="/rules" class="btn btn-ghost" title="How to play — the field guide">Rules ?</a>
+  </div>
+</header>
+
+<!-- Past-games browser (opened via the Games button) -->
+<div id="games-overlay" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="games-title">
+    <button id="btn-games-close" class="modal-close" aria-label="Close">✕</button>
+    <h2 id="games-title">Past games</h2>
+    <p class="modal-lead">Every finished skirmish is recorded. Pick one to watch its replay.</p>
+    <div id="games-list" class="games-list"></div>
+  </div>
+</div>
+
+<!-- My Bots manager -->
+<div id="mybots-overlay" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mybots-title">
+    <button id="btn-mybots-close" class="modal-close" aria-label="Close">✕</button>
+    <h2 id="mybots-title">My bots</h2>
+    <p class="modal-lead">Point at your solution file (<code>.py</code> runs with this Python; anything
+      else runs as a program) — it plays over the same JSON protocol as the tournament.
+      Keep old versions registered to test against them.</p>
+    <div id="mybots-list" class="games-list"></div>
+    <h3>Add a bot</h3>
+    <div class="form-grid">
+      <label for="mb-name">Name</label>
+      <input id="mb-name" placeholder="mybot-v3">
+      <label for="mb-entry">File / command</label>
+      <input id="mb-entry" placeholder="/path/to/my_bot.py">
+      <label for="mb-timeout">Timeout (s)</label>
+      <input id="mb-timeout" type="number" value="2" min="0.1" max="60" step="0.1" style="width:90px">
+    </div>
+    <div class="form-row">
+      <button id="mb-add" class="btn btn-primary">Add bot</button>
+      <span id="mb-msg" class="bot-msg"></span>
+    </div>
+    <div class="modal-foot" id="mybots-foot"></div>
+  </div>
+</div>
+
+<!-- Batch test runner -->
+<div id="batch-overlay" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="batch-title">
+    <button id="btn-batch-close" class="modal-close" aria-label="Close">✕</button>
+    <h2 id="batch-title">Test run</h2>
+    <p class="modal-lead">Play many headless games and compare win rates — your bot vs a baseline,
+      or vs a previous version of itself.</p>
+    <div class="form-grid">
+      <label for="bt-ship0">P1</label>
+      <select id="bt-ship0"></select>
+      <label for="bt-ship1">P2</label>
+      <select id="bt-ship1"></select>
+      <label for="bt-games">Games</label>
+      <input id="bt-games" type="number" value="20" min="1" max="1000" style="width:90px">
+      <label for="bt-map">Map</label>
+      <select id="bt-map"></select>
+      <label for="bt-seed">Seed</label>
+      <input id="bt-seed" type="number" placeholder="random" style="width:110px">
+    </div>
+    <div class="form-row">
+      <label class="form-check"><input id="bt-alt" type="checkbox" checked> alternate first mover</label>
+      <label class="form-check"><input id="bt-record" type="checkbox"> record replays to history</label>
+    </div>
+    <div class="form-row">
+      <button id="bt-run" class="btn btn-primary">Run ▶</button>
+      <button id="bt-stop" class="btn btn-danger" hidden>Stop ⏹</button>
+      <span id="bt-msg" class="bot-msg"></span>
+    </div>
+    <div class="batch-bar" id="bt-bar" hidden><div class="batch-fill" id="bt-fill"></div></div>
+    <div class="batch-summary" id="bt-summary"></div>
+    <div class="batch-table-wrap" id="bt-table-wrap" hidden>
+      <table class="batch-table">
+        <thead><tr><th>#</th><th>map</th><th>first</th><th>winner</th><th>reason</th><th>turns</th><th></th></tr></thead>
+        <tbody id="bt-rows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<main class="layout">
+  <section class="board-wrap">
+    <div class="board-head">
+      <div id="mode-chip" class="chip">—</div>
+      <div id="turn-chip" class="chip chip-turn">—</div>
+      <div class="watch-controls" id="watch-controls" hidden>
+        <button id="btn-step" class="btn">Step ▷</button>
+        <button id="btn-play" class="btn">Auto ▶</button>
+        <button id="btn-pause" class="btn" hidden>Stop ⏸</button>
+        <label class="speed">Speed
+          <input id="inp-speed" type="range" min="80" max="1200" value="500" step="20">
+        </label>
+        <div class="seg persp-seg" id="persp-seg" title="Watch through a ship's fog of war">
+          <button class="seg-btn is-on" data-persp="truth">Truth</button>
+          <button class="seg-btn" data-persp="0">P1 view</button>
+          <button class="seg-btn" data-persp="1">P2 view</button>
+        </div>
+      </div>
+      <button id="btn-reset" class="btn btn-ghost">Reset</button>
+    </div>
+    <div class="replay-bar" id="replay-bar" hidden>
+      <span class="replay-tag">REPLAY</span>
+      <button id="rp-prev" class="btn" title="Previous action">◀</button>
+      <button id="rp-play" class="btn">Play ▶</button>
+      <button id="rp-pause" class="btn" hidden>Pause ⏸</button>
+      <button id="rp-next" class="btn" title="Next action">▶</button>
+      <input id="rp-slider" type="range" min="0" max="0" value="0" step="1" class="replay-slider">
+      <span id="rp-counter" class="replay-counter">0 / 0</span>
+      <label class="speed">Speed
+        <input id="rp-speed" type="range" min="80" max="1200" value="500" step="20">
+      </label>
+      <button id="rp-exit" class="btn btn-ghost">✕ Exit</button>
+    </div>
+    <svg id="board" viewBox="0 0 1000 780" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="banner" class="banner" hidden></div>
+  </section>
+
+  <aside class="side">
+    <div class="panel" id="hud-panel">
+      <h2>Ships</h2>
+      <div id="hud"></div>
+    </div>
+
+    <div class="panel" id="action-panel">
+      <h2>Your move <span id="actions-pips" class="pips"></span></h2>
+      <div id="actions" class="actions"></div>
+      <p id="action-hint" class="hint"></p>
+    </div>
+
+    <div class="panel" id="log-panel">
+      <h2>Log</h2>
+      <div id="log" class="log"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="/static/app.js?v=10"></script>
+<script src="/local/local.js?v=1"></script>
+</body>
+</html>

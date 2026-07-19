@@ -1,0 +1,9 @@
+# Starship Duel — local test app (participants), Linux / macOS / Windows.
+#   pip install -r requirements-local.txt
+#   python -m starship_duel.local
+fastapi>=0.139
+uvicorn>=0.50     # plain uvicorn is enough (no [standard] extras needed locally)
+networkx>=3.0     # crossing-free map layouts; the UI degrades to a circle if absent
+
+# Optional: only needed to play against the bundled PPO bot tiers (uppo-*).
+# torch>=2.6
