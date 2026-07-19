@@ -34,6 +34,14 @@
   .batch-table .w0 { color: var(--p1, #ffb26b); font-weight: 700; }
   .batch-table .w1 { color: var(--p2-bright, #7dd3fc); font-weight: 700; }
   .modal-foot { margin-top: 14px; font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .mb-advanced { margin: 8px 0; }
+  .mb-advanced summary { font-size: 12px; color: var(--muted); font-weight: 700; cursor: pointer; }
+  input[type="file"] { font-size: 12px; }
+  input[type="file"]::file-selector-button {
+    background: #ffffff14; border: 1px solid #ffffff2a; border-radius: 8px;
+    color: inherit; padding: 6px 10px; font: inherit; font-size: 12px;
+    font-weight: 700; cursor: pointer; margin-right: 10px;
+  }
 </style>
 </head>
 <body>
@@ -81,19 +89,26 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mybots-title">
     <button id="btn-mybots-close" class="modal-close" aria-label="Close">✕</button>
     <h2 id="mybots-title">My bots</h2>
-    <p class="modal-lead">Point at your solution file (<code>.py</code> runs with this Python; anything
+    <p class="modal-lead">Attach your solution file (<code>.py</code> runs with this Python; anything
       else runs as a program) — it plays over the same JSON protocol as the tournament.
       Keep old versions registered to test against them.</p>
     <div id="mybots-list" class="games-list"></div>
     <h3>Add a bot</h3>
     <div class="form-grid">
+      <label for="mb-file">Bot file</label>
+      <input id="mb-file" type="file">
       <label for="mb-name">Name</label>
-      <input id="mb-name" placeholder="mybot-v3">
-      <label for="mb-entry">File / command</label>
-      <input id="mb-entry" placeholder="/path/to/my_bot.py">
+      <input id="mb-name" placeholder="auto from the file name, e.g. mybot-v3">
       <label for="mb-timeout">Timeout (s)</label>
       <input id="mb-timeout" type="number" value="2" min="0.1" max="60" step="0.1" style="width:90px">
     </div>
+    <details class="mb-advanced">
+      <summary>Advanced: run a command instead (e.g. <code>node mybot.js</code>)</summary>
+      <div class="form-grid">
+        <label for="mb-entry">Command</label>
+        <input id="mb-entry" placeholder="node /path/to/mybot.js">
+      </div>
+    </details>
     <div class="form-row">
       <button id="mb-add" class="btn btn-primary">Add bot</button>
       <span id="mb-msg" class="bot-msg"></span>

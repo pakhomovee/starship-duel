@@ -93,34 +93,73 @@ class MyBots:
         os.replace(tmp, self.path)  # atomic on POSIX and Windows alike
 
     # -- editing -------------------------------------------------------------
-    def add(self, name: str, entry: str, timeout: float = 2.0,
-            cwd: Optional[str] = None) -> dict:
-        """Register (or replace) a bot; raises ValueError on bad input."""
+    def _check_name(self, name: str, timeout: float) -> str:
         name = name.strip()
         if not _NAME_RE.fullmatch(name):
             raise ValueError("name must be 1-40 chars: letters, digits, _ . -")
         if self.specs.get(name, {}).get("builtin"):
             raise ValueError(f"{name!r} is a bundled bot; pick another name")
+        if not (0.1 <= timeout <= 60):
+            raise ValueError("timeout must be between 0.1 and 60 seconds")
+        return name
+
+    def add(self, name: str, entry: str, timeout: float = 2.0,
+            cwd: Optional[str] = None, stored: bool = False) -> dict:
+        """Register (or replace) a bot; raises ValueError on bad input."""
+        name = self._check_name(name, timeout)
         command = resolve_command(entry)
         if not command:
             raise ValueError("empty command")
-        if not (0.1 <= timeout <= 60):
-            raise ValueError("timeout must be between 0.1 and 60 seconds")
+        self._delete_stored_file(name)  # replacing an uploaded bot drops its file
         self.specs[name] = {
             "command": command,
             "entry": entry.strip(),
             "timeout": float(timeout),
             "cwd": cwd,
             "added": time.time(),
+            "stored": stored,
             "builtin": False,
         }
         self._save()
         return self.describe(name)
 
+    def add_stored(self, name: str, filename: str, data: bytes,
+                   timeout: float = 2.0) -> dict:
+        """Save an uploaded bot file into the data dir and register it.
+
+        The stored copy is what runs, so the participant's original can move or
+        change freely until they re-upload."""
+        name = self._check_name(name, timeout)
+        suffix = Path(filename or "").suffix or ".py"
+        dest = self.path.parent / "bots" / (name + suffix)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        self._delete_stored_file(name)
+        dest.write_bytes(data)
+        if suffix.lower() != ".py":  # uploaded executables must be runnable
+            try:
+                os.chmod(dest, 0o755)
+            except OSError:
+                pass
+        return self.add(name, str(dest), timeout=timeout, stored=True)
+
+    def _delete_stored_file(self, name: str) -> None:
+        """Remove a bot's uploaded file, if it has one (never user files)."""
+        spec = self.specs.get(name)
+        if not spec or not spec.get("stored"):
+            return
+        stored_dir = (self.path.parent / "bots").resolve()
+        p = Path(spec.get("entry", "")).resolve()
+        if p.parent == stored_dir:
+            try:
+                p.unlink()
+            except OSError:
+                pass
+
     def remove(self, name: str) -> bool:
         spec = self.specs.get(name)
         if spec is None or spec.get("builtin"):
             return False
+        self._delete_stored_file(name)
         del self.specs[name]
         self._save()
         return True
@@ -137,6 +176,7 @@ class MyBots:
             "command": s["command"],
             "timeout": s.get("timeout", 2.0),
             "builtin": bool(s.get("builtin")),
+            "stored": bool(s.get("stored")),
             "added": s.get("added"),
         }
 

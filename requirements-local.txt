@@ -4,6 +4,4 @@
 fastapi>=0.139
 uvicorn>=0.50     # plain uvicorn is enough (no [standard] extras needed locally)
 networkx>=3.0     # crossing-free map layouts; the UI degrades to a circle if absent
-
-# Optional: only needed to play against the bundled PPO bot tiers (uppo-*).
-# torch>=2.6
+numpy>=2.0        # nicer planar layouts (optional, but small and worth it)

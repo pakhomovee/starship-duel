@@ -1,21 +1,14 @@
 # Starship Duel — runtime dependencies
 # Core simulator (starship_duel/game, env, bots) needs NONE of these; it is
-# pure stdlib.  These enable the web UI and the RL adapters.
+# pure stdlib.  These enable the web UI and the tournament layer.
+# (Participants running the local test app only need requirements-local.txt.)
 
 # --- web interface (starship_duel/web) ---
 fastapi>=0.139
 uvicorn[standard]>=0.50
 python-multipart>=0.0.9   # multipart bot-submission uploads (tournament)
 networkx>=3.0     # crossing-free (planar) map layouts; degrades to a circle if absent
-
-# --- RL adapters (starship_duel/rl) ---
-numpy>=2.0
-gymnasium>=1.0
-pettingzoo>=1.25
-torch>=2.6
-
-# --- training telemetry (optional; PPO logs scalars if importable) ---
-tensorboard>=2.16
+numpy>=2.0        # planar layout solver (also pulled in by choix/scipy)
 
 # --- tournament scoring (starship_duel/tournament) ---
 choix>=0.3.5      # Bradley-Terry pairwise ranking (pulls scipy)

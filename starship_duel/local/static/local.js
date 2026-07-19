@@ -31,10 +31,12 @@ async function refreshMyBots() {
   for (const b of bots) {
     const row = document.createElement("div");
     row.className = "game-row";
+    // Uploaded bots run from a copy in the data dir — show just the file name.
+    const entryLabel = b.stored ? `uploaded · ${b.entry.split(/[\\/]/).pop()}` : b.entry;
     row.innerHTML = `
       <div class="game-main">
         <div class="game-players">${b.name}${b.builtin ? " <span class='game-sub'>(bundled example)</span>" : ""}</div>
-        <div class="bot-entry" title="${b.command.join(" ")}">${b.entry}</div>
+        <div class="bot-entry" title="${b.command.join(" ")}">${entryLabel}</div>
         <div class="bot-msg" hidden></div>
       </div>
       <span class="game-sub">${b.timeout}s</span>
@@ -70,15 +72,43 @@ async function refreshMyBots() {
   } catch (e) { /* cosmetic only */ }
 }
 
+// Suggest a bot name from the attached file (mybot_v3.py -> mybot_v3).
+$("#mb-file").onchange = () => {
+  const f = $("#mb-file").files[0];
+  if (!f || $("#mb-name").value.trim()) return;
+  $("#mb-name").value = f.name.replace(/\.[^.]*$/, "")
+    .replace(/[^A-Za-z0-9_.\-]+/g, "-").slice(0, 40);
+};
+
+function fileToB64(file) {
+  return new Promise((resolve, reject) => {
+    const rd = new FileReader();
+    rd.onload = () => resolve(String(rd.result).split(",", 2)[1]);  // strip data: prefix
+    rd.onerror = () => reject(rd.error);
+    rd.readAsDataURL(file);
+  });
+}
+
 $("#mb-add").onclick = async () => {
   const msg = $("#mb-msg");
+  const file = $("#mb-file").files[0];
+  const command = $("#mb-entry").value.trim();
+  const name = $("#mb-name").value.trim();
+  const timeout = Number($("#mb-timeout").value) || 2;
+  if (!file && !command) {
+    msg.className = "bot-msg bad"; msg.textContent = "attach a bot file (or give a command under Advanced)";
+    return;
+  }
   msg.className = "bot-msg"; msg.textContent = "adding…";
-  const body = {
-    name: $("#mb-name").value.trim(),
-    entry: $("#mb-entry").value.trim(),
-    timeout: Number($("#mb-timeout").value) || 2,
-  };
-  const r = await fetch(api("/api/mybots"), {
+  let path, body;
+  if (file) {  // attached file wins; it's copied into the app's data dir
+    path = "/api/mybots/upload";
+    body = { name, filename: file.name, content_b64: await fileToB64(file), timeout };
+  } else {
+    path = "/api/mybots";
+    body = { name, entry: command, timeout };
+  }
+  const r = await fetch(api(path), {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
   if (!r.ok) {
@@ -86,8 +116,8 @@ $("#mb-add").onclick = async () => {
     msg.className = "bot-msg bad"; msg.textContent = detail || "failed";
     return;
   }
-  msg.className = "bot-msg ok"; msg.textContent = `added ${body.name} — hit Check ✓ to verify it`;
-  $("#mb-name").value = ""; $("#mb-entry").value = "";
+  msg.className = "bot-msg ok"; msg.textContent = `added ${name} — hit Check ✓ to verify it`;
+  $("#mb-name").value = ""; $("#mb-entry").value = ""; $("#mb-file").value = "";
   refreshMyBots(); refreshBotSelects();
 };
 

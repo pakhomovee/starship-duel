@@ -9,7 +9,6 @@ static assets; adds a "my bots" registry and a batch test runner.
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 import os
 import threading
@@ -42,7 +41,6 @@ _LOCAL_STATIC = Path(__file__).parent / "static"
 # The DeepSeek bot spends real API credits — keep it off the local surface
 # unless explicitly enabled (same env gate as the web app).
 DEEPSEEK_ENABLED = bool(os.environ.get("STARSHIP_ENABLE_DEEPSEEK"))
-_TORCH_OK = importlib.util.find_spec("torch") is not None
 
 # Mutable app state, (re)built by configure() so tests / --data-dir can retarget
 # it before the server starts serving.
@@ -93,6 +91,13 @@ class AddBot(BaseModel):
     timeout: float = 2.0
 
 
+class UploadBot(BaseModel):
+    name: str
+    filename: str                       # original name; its extension decides
+    content_b64: str                    # the file itself (base64)
+    timeout: float = 2.0
+
+
 class CreateBatch(BaseModel):
     ship0: str = "heuristic"
     ship1: str = "random"
@@ -107,26 +112,15 @@ class CreateBatch(BaseModel):
 # helpers                                                                     #
 # --------------------------------------------------------------------------- #
 def _builtin_bots() -> list:
-    names = []
-    for b in sorted(REGISTRY):
-        if b == "deepseek" and not DEEPSEEK_ENABLED:
-            continue
-        # PPO tiers need torch, an optional heavyweight install.
-        if b.startswith(("ppo", "uppo")) and not _TORCH_OK:
-            continue
-        names.append(b)
-    return names
+    return [b for b in sorted(REGISTRY)
+            if b != "deepseek" or DEEPSEEK_ENABLED]
 
 
 def _valid_controller(c: str, allow_human: bool = True) -> bool:
     if c == "human":
         return allow_human
     if c in REGISTRY:
-        if c == "deepseek" and not DEEPSEEK_ENABLED:
-            return False
-        if c.startswith(("ppo", "uppo")) and not _TORCH_OK:
-            return False
-        return True
+        return c != "deepseek" or DEEPSEEK_ENABLED
     return c.startswith(PREFIX) and c[len(PREFIX):] in MYBOTS.specs
 
 
@@ -197,7 +191,6 @@ def info():
         "data_dir": str(DATA_DIR),
         "python": platform.python_version(),
         "platform": platform.platform(terse=True),
-        "torch": _TORCH_OK,
         "recorded_games": STORE.count(),
     }
 
@@ -298,6 +291,28 @@ def my_bots():
 def add_my_bot(req: AddBot):
     try:
         return MYBOTS.add(req.name, req.entry, timeout=req.timeout)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
+
+@app.post("/api/mybots/upload")
+def upload_my_bot(req: UploadBot):
+    """Attach a bot file: it's copied into the data dir and run from there
+    (a .py with this Python, anything else as an executable)."""
+    import base64
+    try:
+        data = base64.b64decode(req.content_b64, validate=True)
+    except Exception:
+        raise HTTPException(400, "content_b64 is not valid base64")
+    if not data:
+        raise HTTPException(400, "empty file")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(400, f"file too large (>{MAX_UPLOAD_BYTES // 2**20} MB)")
+    try:
+        return MYBOTS.add_stored(req.name, req.filename, data, timeout=req.timeout)
     except ValueError as e:
         raise HTTPException(400, str(e))
 

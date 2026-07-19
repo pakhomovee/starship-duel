@@ -1,7 +1,10 @@
 // Example Starship Duel bot (C++). Build & run:
 //
-//   g++ -std=c++17 -O2 example_bot.cpp -o example_bot        # needs nlohmann/json
+//   g++ -std=c++17 -O2 -I. example_bot.cpp -o example_bot     # bundled nlohmann/json
 //   python -m starship_duel.run --bot0 heuristic --bot1 "cmd:./example_bot"
+//
+//   # Windows (MinGW-w64, no WSL) — static link so the .exe has no DLL deps:
+//   g++ -std=c++17 -O2 -I. example_bot.cpp -o example_bot.exe -static
 //
 // Simple hunt-and-hide strategy, mirroring the Python example.
 

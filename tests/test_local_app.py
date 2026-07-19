@@ -125,6 +125,40 @@ class TestLocalApp(unittest.TestCase):
         chk = self.client.post("/api/mybots/crasher/check").json()
         self.assertFalse(chk["ok"], chk)
 
+    def test_mybots_upload(self):
+        import base64
+        code = textwrap.dedent("""\
+            import json, sys
+            for line in sys.stdin:
+                json.loads(line)
+                print(json.dumps({"action": "END_TURN"}), flush=True)
+        """).encode()
+        r = self.client.post("/api/mybots/upload", json={
+            "name": "uploaded-v1", "filename": "solution.py",
+            "content_b64": base64.b64encode(code).decode()})
+        self.assertEqual(r.status_code, 200, r.text)
+        desc = r.json()
+        self.assertTrue(desc["stored"])
+        stored = Path(self._tmp.name) / "bots" / "uploaded-v1.py"
+        self.assertTrue(stored.exists())
+        self.assertEqual(desc["command"][0], sys.executable)
+        self.assertEqual(Path(desc["command"][1]).resolve(), stored.resolve())
+
+        chk = self.client.post("/api/mybots/uploaded-v1/check").json()
+        self.assertTrue(chk["ok"], chk)
+
+        # removing an uploaded bot also removes its stored file
+        self.assertEqual(self.client.delete("/api/mybots/uploaded-v1").status_code, 200)
+        self.assertFalse(stored.exists())
+
+    def test_mybots_upload_rejects_bad_input(self):
+        r = self.client.post("/api/mybots/upload", json={
+            "name": "x", "filename": "a.py", "content_b64": "!!!not-base64!!!"})
+        self.assertEqual(r.status_code, 400)
+        r = self.client.post("/api/mybots/upload", json={
+            "name": "x", "filename": "a.py", "content_b64": ""})
+        self.assertEqual(r.status_code, 400)
+
     def test_mybots_validation(self):
         r = self.client.post("/api/mybots", json={"name": "bad name!", "entry": "x"})
         self.assertEqual(r.status_code, 400)

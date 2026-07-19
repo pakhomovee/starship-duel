@@ -9,7 +9,7 @@ machine (Linux / macOS / Windows):
   * register their solution files as "my bots" (run as plain subprocesses over
     the arena JSON-line protocol, same as on the server);
   * play or watch games against the built-in baselines (random / heuristic /
-    hunter / PPO tiers) and against previous versions of their own bot;
+    hunter) and against previous versions of their own bot;
   * batch test runs (N headless games) with win-rate stats and optional replays;
   * browse and replay game history.
 

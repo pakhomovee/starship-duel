@@ -119,8 +119,8 @@ class BatchRunner:
                     break
                 gseed = None if base_seed is None else base_seed + 101 * g
                 first = (g % 2) if run.alternate_first else 0
-                # Bots are injected (not rebuilt) each game: subprocess bots are
-                # respawned by reset(), PPO checkpoints load only once.
+                # Bots are injected (not rebuilt) each game; subprocess bots
+                # are respawned by reset().
                 session = GameSession(
                     dict(run.controllers), seed=gseed, map_id=run.map_id,
                     first_mover=first, bot_overrides=bots,
