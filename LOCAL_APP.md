@@ -48,31 +48,35 @@ and reports crashes, protocol mistakes (strikes) or timeouts immediately.
 Tip for testing progress: register old copies of your solution under versioned
 names (`mybot-v1`, `mybot-v2`, …) and batch them against the newest one.
 
-### Building a C++ bot
+### C++ bots
 
-The app runs your bot as a plain subprocess, so a C++ bot just needs to be
-compiled to a native executable first — then attach that executable in **My
-Bots** exactly like a `.py` file. The bundled `nlohmann/json.hpp` lives beside
-the SDK, so build from `starship_duel/arena/sdk/cpp/` (or add it with `-I`):
+Just **attach your `.cpp` file** in My Bots — the app compiles it to a native
+executable for you (the bundled `nlohmann/json.hpp` is already on the include
+path) and runs that. You only need a C++ compiler installed:
+
+| OS            | one-time install                                             |
+|---------------|-------------------------------------------------------------|
+| Linux         | `sudo apt install g++`                                       |
+| macOS         | `xcode-select --install`                                    |
+| Windows (no WSL) | `winget install BrechtSanders.WinLibs.POSIX.UCRT` (MinGW-w64) |
+
+On Windows the app static-links the build, so the produced `.exe` runs without
+any "missing DLL" errors. If your compiler isn't named `g++`/`clang++` or isn't
+on `PATH`, point `STARSHIP_CXX` at it. A build error (or "no compiler found") is
+reported inline when you attach, and a failed re-compile leaves your previous
+working bot untouched.
+
+Prefer to build it yourself? Compile to an executable and attach *that* instead
+(any non-`.py`, non-source file is run as-is):
 
 ```bash
-# Linux / macOS
 cd starship_duel/arena/sdk/cpp
-g++ -std=c++17 -O2 -I. example_bot.cpp -o example_bot
+g++ -std=c++17 -O2 -I. example_bot.cpp -o example_bot          # Linux/macOS
+g++ -std=c++17 -O2 -I. example_bot.cpp -o example_bot.exe -static   # Windows/MinGW
 ```
 
-```powershell
-# Windows (no WSL needed) — install a compiler once:
-#   winget install BrechtSanders.WinLibs.POSIX.UCRT      # MinGW-w64 g++
-# then build a *self-contained* .exe (static linking avoids "missing
-# libstdc++/libwinpthread DLL" errors when the app launches it):
-cd starship_duel\arena\sdk\cpp
-g++ -std=c++17 -O2 -I. example_bot.cpp -o example_bot.exe -static
-```
-
-Attach the resulting `example_bot` / `example_bot.exe` in **My Bots** and hit
-**Check ✓**. Because the runtime is just stdin/stdout JSON lines, a bot built
-this way behaves identically on Linux, macOS and Windows.
+Either way, hit **Check ✓** after attaching — the runtime is just stdin/stdout
+JSON lines, so the bot behaves identically on Linux, macOS and Windows.
 
 ## Testing your bot ("Test Run" ⚔)
 

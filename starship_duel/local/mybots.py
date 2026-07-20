@@ -16,6 +16,8 @@ import json
 import os
 import re
 import shlex
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -30,6 +32,40 @@ _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,39}")
 
 _PKG = Path(__file__).resolve().parent.parent
 _EXAMPLE_PY = _PKG / "arena" / "sdk" / "python" / "example_bot.py"
+_CPP_SDK_DIR = _PKG / "arena" / "sdk" / "cpp"       # bundles nlohmann/json.hpp
+
+#: Source-file extensions we compile on attach (can't be exec'd directly).
+_CPP_SRC_EXTS = {".cpp", ".cc", ".cxx", ".c++", ".c"}
+
+
+def compile_cpp(src: Path, out: Path) -> None:
+    """Compile a C++ (or C) source file to the native executable ``out``.
+
+    Mirrors the tournament server's non-sandboxed build so a bot behaves the
+    same locally as on the judge. Raises ``ValueError`` (→ HTTP 400 with an
+    actionable message) if no compiler is present or the build fails.
+    """
+    cxx = os.environ.get("STARSHIP_CXX") or shutil.which("g++") or shutil.which("clang++")
+    if not cxx:
+        raise ValueError(
+            "no C++ compiler found — install one and re-attach: "
+            "Linux `sudo apt install g++`, macOS `xcode-select --install`, "
+            "Windows `winget install BrechtSanders.WinLibs.POSIX.UCRT` (MinGW-w64). "
+            "Already have one elsewhere? point STARSHIP_CXX at it.")
+    cmd = [cxx, "-std=c++17", "-O2", "-I", str(_CPP_SDK_DIR), str(src), "-o", str(out)]
+    if os.name == "nt":
+        # Static-link so the produced .exe carries libstdc++/libwinpthread and
+        # launches without "missing DLL" errors on a bare Windows box.
+        cmd.append("-static")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except FileNotFoundError:
+        raise ValueError(f"could not run C++ compiler {cxx!r}")
+    except subprocess.TimeoutExpired:
+        raise ValueError("C++ compile timed out (120s)")
+    if proc.returncode != 0 or not out.exists():
+        detail = (proc.stderr or proc.stdout or "unknown error").strip()
+        raise ValueError("C++ compile failed:\n" + detail[-1500:])
 
 
 def default_data_dir() -> Path:
@@ -48,6 +84,11 @@ def resolve_command(entry: str) -> List[str]:
     if p.is_file():
         if p.suffix.lower() == ".py":
             return [sys.executable, str(p.resolve())]
+        if p.suffix.lower() in _CPP_SRC_EXTS:
+            raise ValueError(
+                f"{p.name} is C++ source, not a program — attach it in My Bots "
+                "(it gets compiled for you) or point this at the compiled "
+                "executable instead (see LOCAL_APP.md).")
         return [str(p.resolve())]
     # shlex's posix mode mangles Windows backslash paths; split accordingly.
     return shlex.split(entry, posix=(os.name != "nt"))
@@ -110,7 +151,9 @@ class MyBots:
         command = resolve_command(entry)
         if not command:
             raise ValueError("empty command")
-        self._delete_stored_file(name)  # replacing an uploaded bot drops its file
+        # Replacing an uploaded bot drops its old file — but never the file we
+        # are registering now (a same-path re-attach reuses it).
+        self._delete_stored_file(name, keep=entry.strip())
         self.specs[name] = {
             "command": command,
             "entry": entry.strip(),
@@ -128,27 +171,52 @@ class MyBots:
         """Save an uploaded bot file into the data dir and register it.
 
         The stored copy is what runs, so the participant's original can move or
-        change freely until they re-upload."""
+        change freely until they re-upload.  A C++/C **source** file is compiled
+        to a native executable on the way in (source can't be exec'd directly);
+        a ``.py`` runs under this Python; anything else is taken as a prebuilt
+        executable."""
         name = self._check_name(name, timeout)
         suffix = Path(filename or "").suffix or ".py"
-        dest = self.path.parent / "bots" / (name + suffix)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        self._delete_stored_file(name)
-        dest.write_bytes(data)
-        if suffix.lower() != ".py":  # uploaded executables must be runnable
+        bots_dir = self.path.parent / "bots"
+        bots_dir.mkdir(parents=True, exist_ok=True)
+
+        if suffix.lower() in _CPP_SRC_EXTS:
+            # Compile to a scratch binary and swap it in only on a clean build,
+            # so a failed recompile leaves the previous working bot intact.
+            dest = bots_dir / (name + (".exe" if os.name == "nt" else ""))
+            src = bots_dir / (name + ".build" + suffix)
+            tmp = bots_dir / (name + ".build.out")
+            src.write_bytes(data)
+            try:
+                compile_cpp(src, tmp)          # ValueError → HTTP 400 in the UI
+                os.replace(tmp, dest)
+            finally:
+                src.unlink(missing_ok=True)
+                tmp.unlink(missing_ok=True)
+        else:
+            dest = bots_dir / (name + suffix)
+            dest.write_bytes(data)
+        if dest.suffix.lower() != ".py":       # executables must be runnable
             try:
                 os.chmod(dest, 0o755)
             except OSError:
                 pass
         return self.add(name, str(dest), timeout=timeout, stored=True)
 
-    def _delete_stored_file(self, name: str) -> None:
-        """Remove a bot's uploaded file, if it has one (never user files)."""
+    def _delete_stored_file(self, name: str, keep: Optional[str] = None) -> None:
+        """Remove a bot's uploaded/compiled file, if it has one (never user
+        files, and never ``keep`` — the path currently being registered)."""
         spec = self.specs.get(name)
         if not spec or not spec.get("stored"):
             return
         stored_dir = (self.path.parent / "bots").resolve()
         p = Path(spec.get("entry", "")).resolve()
+        if keep:
+            try:
+                if p == Path(keep).expanduser().resolve():
+                    return
+            except OSError:
+                pass
         if p.parent == stored_dir:
             try:
                 p.unlink()

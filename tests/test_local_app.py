@@ -2,6 +2,7 @@
 
 Skipped cleanly when fastapi isn't installed, like the other web tests."""
 
+import os
 import sys
 import tempfile
 import textwrap
@@ -150,6 +151,86 @@ class TestLocalApp(unittest.TestCase):
         # removing an uploaded bot also removes its stored file
         self.assertEqual(self.client.delete("/api/mybots/uploaded-v1").status_code, 200)
         self.assertFalse(stored.exists())
+
+    # -- C++ bots (compile-on-attach) ---------------------------------------
+    def _fake_cxx(self, *, fail: bool = False) -> str:
+        """A stand-in compiler so these tests need no real toolchain: it reads
+        the ``-o <out>`` argument and drops a runnable protocol bot there (or
+        exits non-zero when ``fail``). Points STARSHIP_CXX at itself."""
+        script = Path(self._tmp.name) / ("badcxx.sh" if fail else "fakecxx.sh")
+        if fail:
+            script.write_text("#!/usr/bin/env bash\necho 'error: nope' >&2\nexit 1\n")
+        else:
+            bot = ('#!/usr/bin/env python3\n'
+                   'import sys,json\n'
+                   'for l in sys.stdin:\n'
+                   '    if l.strip():\n'
+                   '        sys.stdout.write(json.dumps({"index":0})+"\\n");sys.stdout.flush()\n')
+            script.write_text(
+                "#!/usr/bin/env bash\n"
+                'out=""; prev=""\n'
+                'for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done\n'
+                f"cat > \"$out\" <<'BOT'\n{bot}BOT\n"
+                'chmod +x "$out"\n')
+        os.chmod(script, 0o755)
+        os.environ["STARSHIP_CXX"] = str(script)
+        self.addCleanup(os.environ.pop, "STARSHIP_CXX", None)
+        return str(script)
+
+    @unittest.skipIf(os.name == "nt", "fake-compiler shim is POSIX-only")
+    def test_mybots_upload_cpp_compiles_and_runs(self):
+        import base64
+        self._fake_cxx()
+        src = b'#include "starship_bot.hpp"\nint main(){}\n'
+        r = self.client.post("/api/mybots/upload", json={
+            "name": "cppbot", "filename": "example_bot.cpp",
+            "content_b64": base64.b64encode(src).decode()})
+        self.assertEqual(r.status_code, 200, r.text)
+        desc = r.json()
+        # a .cpp is compiled: the command runs the built binary directly, not python
+        self.assertEqual(len(desc["command"]), 1)
+        self.assertNotEqual(desc["command"][0], sys.executable)
+        binary = Path(self._tmp.name) / "bots" / "cppbot"
+        self.assertTrue(binary.exists())
+        # only the built binary is kept — no leftover source or scratch files
+        self.assertEqual({p.name for p in binary.parent.iterdir()}, {"cppbot"})
+        self.assertTrue(self.client.post("/api/mybots/cppbot/check").json()["ok"])
+
+    @unittest.skipIf(os.name == "nt", "fake-compiler shim is POSIX-only")
+    def test_mybots_upload_cpp_build_failure_is_reported(self):
+        import base64
+        self._fake_cxx(fail=True)
+        r = self.client.post("/api/mybots/upload", json={
+            "name": "cppbot", "filename": "bot.cpp",
+            "content_b64": base64.b64encode(b"int main(){}\n").decode()})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("compile failed", r.text)
+
+    @unittest.skipIf(os.name == "nt", "fake-compiler shim is POSIX-only")
+    def test_mybots_cpp_failed_rebuild_keeps_old_binary(self):
+        import base64
+        code = base64.b64encode(b"int main(){}\n").decode()
+        self._fake_cxx()  # good build first
+        self.client.post("/api/mybots/upload", json={
+            "name": "cppbot", "filename": "bot.cpp", "content_b64": code})
+        binary = Path(self._tmp.name) / "bots" / "cppbot"
+        self.assertTrue(binary.exists())
+        # a broken recompile under the same name must not destroy the good bot
+        self._fake_cxx(fail=True)
+        r = self.client.post("/api/mybots/upload", json={
+            "name": "cppbot", "filename": "bot.cpp", "content_b64": code})
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(binary.exists())
+        self.assertTrue(self.client.post("/api/mybots/cppbot/check").json()["ok"])
+
+    def test_mybots_add_rejects_source_path(self):
+        # pointing the Advanced command field at raw source gives a clear error,
+        # not a confusing "Exec format error" at game time
+        src = Path(self._tmp.name) / "sol.cpp"
+        src.write_text("int main(){}\n")
+        r = self.client.post("/api/mybots", json={"name": "srcbot", "entry": str(src)})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("compiled", r.text.lower())
 
     def test_mybots_upload_rejects_bad_input(self):
         r = self.client.post("/api/mybots/upload", json={
