@@ -349,6 +349,7 @@ class Engine:
             self.belief[rival_id].on_rival_jump()
         else:
             self._see(rival_id, ship.position)  # still exposed -> tracked exactly
+            events.append(f"ship{s} still exposed -- tracked at {dest}")
 
         # PROXIMITY_ALERT (defender's short-range alarm around its ship): moving
         # adjacent to the defender trips it and reveals the raider's location.
@@ -587,6 +588,7 @@ class Engine:
         if (ship.unlocked["long_range_scanners"] and not rival.deep_cloak_active
                 and rival.position in self._systems_within(ship.position, cfg.lrs_range)):
             self._see(s, rival.position)
+            events.append(f"ship{s} tracks rival at {rival.position} (long-range scanners)")
 
         # Income from owned (living) systems -- also the per-turn domination gain.
         income = self._controlled_income(s)
