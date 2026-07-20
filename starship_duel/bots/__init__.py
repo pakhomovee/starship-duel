@@ -25,27 +25,18 @@ BotFactory = Callable[..., Bot]
 #: The checkpoints ship in ``bots/ppo/``; the factory is lazy so importing this
 #: package never pulls in torch/numpy unless a PPO bot is actually built.
 _PPO_DIR = Path(__file__).resolve().parent / "ppo"
-# Legacy single-map (flat-encoder) tiers -- trained on the pre-rebalance game;
-# kept only for backwards compatibility.  Prefer the map-universal ``uppo`` tiers.
-_PPO_TIERS = {
-    "ppo-easy": "ckpt_500.pt",
-    "ppo-medium": "ckpt_2000.pt",
-}
-# Map-universal (GNN) tiers -- current game, play any map. Ordered easy < medium <
-# hard: ``uppo`` (the default/hardest) is the ckpt_final policy, which beats the
-# previous top policy (now demoted to ``uppo-medium``) ~73% head-to-head.
+# Map-universal (GNN) tiers -- the current game, playable on any map. Ordered
+# easy < medium < hard: ``uppo`` (the default/hardest) is the ckpt_final policy,
+# which beats the previous top policy (now demoted to ``uppo-medium``) ~73%
+# head-to-head.  These are the only trained tiers offered for selection; the
+# legacy single-map ``ppo-*`` checkpoints were trained on the pre-rebalance game
+# and are no longer registered (the ``.pt`` files remain in ``bots/ppo/`` and can
+# still be loaded ad hoc via the ``ppo:<checkpoint>`` CLI spec).
 _UPPO_TIERS = {
     "uppo-easy": "uppo-easy.pt",
     "uppo-medium": "uppo-medium.pt",
     "uppo": "uppo.pt",
 }
-
-
-def _make_ppo(ckpt: str, display: str) -> BotFactory:
-    def factory(seed=None) -> Bot:
-        from .ppo_bot import PpoBot
-        return PpoBot.from_checkpoint(str(_PPO_DIR / ckpt), name=display, seed=seed)
-    return factory
 
 
 def _make_uppo(ckpt: str, display: str) -> BotFactory:
@@ -63,10 +54,9 @@ REGISTRY: Dict[str, BotFactory] = {
     "human": lambda seed=None: HumanBot(),
 }
 
-# Register bundled PPO tiers only if their checkpoint file is present.
-for _tier, _ckpt in _PPO_TIERS.items():
-    if (_PPO_DIR / _ckpt).exists():
-        REGISTRY[_tier] = _make_ppo(_ckpt, _tier)
+# Register the bundled map-universal (uppo) tiers only if their checkpoint file
+# is present.  The legacy single-map ``ppo-*`` tiers are intentionally not
+# registered (see above).
 for _tier, _ckpt in _UPPO_TIERS.items():
     if (_PPO_DIR / _ckpt).exists():
         REGISTRY[_tier] = _make_uppo(_ckpt, _tier)

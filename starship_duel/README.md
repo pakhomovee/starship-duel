@@ -134,11 +134,13 @@ can play against your own C++/Python/etc. submission right from the UI.
   human-vs-bot), and **Auto** streams over a WebSocket at an adjustable speed,
   pausing when it's your turn.
 
-**Play against a trained policy.** The two bundled PPO checkpoints show up as
-difficulty tiers — **`ppo-easy`** (`bots/ppo/ckpt_200.pt`) and **`ppo-medium`**
-(`bots/ppo/ckpt_500.pt`) — selectable like any other bot (loaded lazily, so torch
-is only imported if you actually pick one). Drop more `*.pt` files in and register
-tiers in `bots/__init__.py`.
+**Play against a trained policy.** The bundled map-universal PPO checkpoints show
+up as difficulty tiers — **`uppo-easy`**, **`uppo-medium`**, and **`uppo`** (the
+hardest) — selectable like any other bot (loaded lazily, so torch is only imported
+if you actually pick one). Drop more `*.pt` files in and register tiers in
+`bots/__init__.py`. The legacy single-map `ppo-*` checkpoints (trained on the
+pre-rebalance game) are no longer offered for selection, but their `.pt` files
+remain in `bots/ppo/` and can be loaded ad hoc via the `ppo:<checkpoint>` CLI spec.
 
 There's also a **`deepseek`** controller that picks each move via the DeepSeek
 chat API — set `DEEPSEEK_API_KEY` in the environment (optionally `DEEPSEEK_MODEL`
@@ -323,8 +325,9 @@ Competitors come from a server-side **allowlist** (never the DB or a web request
 { "alice": {"command": ["python","bots/alice.py"], "timeout": 1.0} }
 ```
 
-Plus the four **baselines** (`random`, `heuristic`, `ppo-easy`, `ppo-medium`) that
-every ladder includes — the during-contest "partial standings" opponents.
+Plus the **baselines** (`random`, `heuristic`, `hunter`, `uppo-easy`,
+`uppo-medium`, `uppo`) that every ladder includes — the during-contest "partial
+standings" opponents.
 
 ```bash
 # schedule participant-vs-baseline matches (partial standings) — admin endpoint,

@@ -26,13 +26,13 @@ const ACT_DESC = {
   JUMP: "Move to an adjacent system. Entering a rival-claimed or rival-occupied system exposes your position.",
   HOLD: "Stay put and slip back under cloak — the way to disappear again after being spotted.",
   CLAIM: "Take the system you're standing on for income (binaries pay more) — but claiming exposes your position.",
-  FIRE: "Attack your current system. Instant win if the rival is here; otherwise a public miss (and it exposes you if they have Proximity Alert).",
-  SCAN: "Spend Energy to reveal the rival's exact system — unless they are deep-cloaked.",
-  DEEP_CLOAK: "Spend Energy to become undetectable for 2 turns — immune to every reveal, even sitting in enemy territory.",
+  FIRE: "Raid your current system (costs 3⚡, charged hit or miss). On a hit — the rival is here — steal their control points, capture the ground under them, and cost them a life. A deep-cloaked rival is immune.",
+  SCAN: "Free: sweep the ownership map and pin the rival's exact system — unless they are deep-cloaked.",
+  DEEP_CLOAK: "Spend Energy to become undetectable for 2 turns — Scan and Long-Range Scanners sweep right past you and you can't be raided or lose a life (a point-blank Proximity Alert still catches you).",
   OVERCHARGE: "Spend Energy to bank +1 extra action for next turn (stacks).",
-  UNLOCK_PROXIMITY_ALERT: "Permanent unlock: the rival is revealed whenever their Fire misses near you.",
-  UNLOCK_LONG_RANGE_SCANNERS: "Permanent unlock: reveal the rival when you jump into the system they're in.",
-  UNLOCK_JAMMING: "Permanent unlock: your Energy-spending actions show to the rival only as a generic “spent Energy”.",
+  UNLOCK_PROXIMITY_ALERT: "Permanent unlock (defensive): a short-range alarm — the rival is revealed (piercing cloak) when they move onto or beside your ship — plus a shield that stops a raid from capturing your territory.",
+  UNLOCK_LONG_RANGE_SCANNERS: "Permanent unlock (offensive): passively track the rival's exact system while they're within 2 hops, see ownership 2 hops out, and Fire can raid a rival one hop away.",
+  UNLOCK_JAMMING: "Permanent unlock: your Energy-spending actions show to the rival only as a generic “spent Energy”, and it blinds their Proximity Alert.",
   END_TURN: "End your turn now. Any actions beyond the base 2 left unspent are banked for next turn.",
 };
 
@@ -308,6 +308,31 @@ function text(x, y, str, cls) {
 }
 
 // ---- HUD -------------------------------------------------------------------
+// Domination race toward the map-control win. Both ships' control scores are
+// PUBLIC, so this renders for the rival too (see the rival card below).
+function domHtmlFor(id, dom, domTarget) {
+  if (!domTarget) return "";
+  const pct = Math.min(100, Math.round((100 * dom) / domTarget));
+  const domCol = id === 0 ? "var(--p1)" : "var(--p2-bright)";
+  return `
+      <div class="dom" title="Map control — first to ${domTarget} wins">
+        <span class="dom-label"><svg class="ic-dom" viewBox="0 0 64 64"><use href="#res-domination"/></svg>CONTROL</span>
+        <div class="dom-bar"><div class="dom-fill" style="width:${pct}%;background:${domCol}"></div></div>
+        <span class="dom-num">${dom}/${domTarget}</span>
+      </div>`;
+}
+
+// Lives (the hunt) are also PUBLIC: filled/empty pips; run to 0 and you're out.
+function livesHtmlFor(id, v) {
+  const livesMax = v.lives_max || 0;
+  if (!livesMax) return "";
+  const livesNow = (v.lives && v.lives[id] != null) ? v.lives[id] : livesMax;
+  let pips = "";
+  for (let i = 0; i < livesMax; i++)
+    pips += `<svg class="ic-life" viewBox="0 0 24 24"><use href="#${i < livesNow ? "hud-life-filled" : "hud-life-empty"}"/></svg>`;
+  return `<div class="lives" title="Lives — lose all and you're eliminated">${pips}</div>`;
+}
+
 function renderHud(v) {
   const host = $("#hud");
   host.replaceChildren();
@@ -319,26 +344,7 @@ function renderHud(v) {
     const posHtml = known ? `<b>${h.position}</b>` : `<span class="pos-hidden">hidden</span>`;
     const badges = Object.entries(h.unlocked).filter(([, on]) => on)
       .map(([k]) => `<span class="badge">${UNLOCK_BADGE[k]}</span>`).join("");
-    // Domination race toward the map-control win.
     const dom = (v.domination && v.domination[h.id]) || 0;
-    const pct = domTarget ? Math.min(100, Math.round((100 * dom) / domTarget)) : 0;
-    const domCol = h.id === 0 ? "var(--p1)" : "var(--p2-bright)";
-    const domHtml = domTarget ? `
-      <div class="dom" title="Map control — first to ${domTarget} wins">
-        <span class="dom-label"><svg class="ic-dom" viewBox="0 0 64 64"><use href="#res-domination"/></svg>CONTROL</span>
-        <div class="dom-bar"><div class="dom-fill" style="width:${pct}%;background:${domCol}"></div></div>
-        <span class="dom-num">${dom}/${domTarget}</span>
-      </div>` : "";
-    // Lives (the hunt): filled/empty pips; run to 0 and you're eliminated.
-    const livesMax = v.lives_max || 0;
-    const livesNow = (v.lives && v.lives[h.id] != null) ? v.lives[h.id] : livesMax;
-    let livesHtml = "";
-    if (livesMax) {
-      let pips = "";
-      for (let i = 0; i < livesMax; i++)
-        pips += `<svg class="ic-life" viewBox="0 0 24 24"><use href="#${i < livesNow ? "hud-life-filled" : "hud-life-empty"}"/></svg>`;
-      livesHtml = `<div class="lives" title="Lives — lose all and you're eliminated">${pips}</div>`;
-    }
     card.innerHTML = `
       <svg class="avatar" viewBox="0 0 140 140"><use href="#${h.id === 0 ? "ship-warm" : "ship-cool"}"/></svg>
       <div class="meta">
@@ -350,9 +356,28 @@ function renderHud(v) {
           <span class="stat"><svg class="ic" viewBox="0 0 24 24"><use href="#pip-action"/></svg><b>${h.actions_remaining}</b> act</span>
           <span class="stat"><svg class="ic" viewBox="0 0 64 64"><use href="#res-overcharge"/></svg><b>${h.banked_overcharge}</b> banked</span>
         </div>
-        ${domHtml}
-        ${livesHtml}
+        ${domHtmlFor(h.id, dom, domTarget)}
+        ${livesHtmlFor(h.id, v)}
         <div class="badges">${badges}</div>
+      </div>`;
+    host.appendChild(card);
+  }
+
+  // Player perspective renders only the self card above. Surface the rival's
+  // PUBLIC standings too — control score and lives are visible to both ships —
+  // while their position, energy and actions stay hidden.
+  if (v.perspective !== "truth" && v.self_id !== undefined && v.self_id !== null) {
+    const rid = 1 - v.self_id;
+    const rdom = (v.domination && v.domination[rid]) || 0;
+    const card = document.createElement("div");
+    card.className = `ship-card p${rid} rival-public` + (v.turn_ship === rid && !v.done ? " active" : "");
+    card.innerHTML = `
+      <svg class="avatar" viewBox="0 0 140 140"><use href="#${rid === 0 ? "ship-warm" : "ship-cool"}"/></svg>
+      <div class="meta">
+        <div class="name" style="color:${rid === 0 ? "var(--p1)" : "var(--p2-bright)"}">Player ${rid + 1}
+          <span style="color:var(--muted);font-weight:700;font-size:11px">· rival (public intel)</span></div>
+        ${domHtmlFor(rid, rdom, domTarget)}
+        ${livesHtmlFor(rid, v)}
       </div>`;
     host.appendChild(card);
   }

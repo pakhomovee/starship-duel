@@ -155,11 +155,14 @@ class TestWebApi(unittest.TestCase):
 
     @unittest.skipUnless(_HAVE_RL, "torch not installed")
     def test_play_against_ppo_bot(self):
-        # The bundled PPO tiers are listed and playable from the UI.
+        # The bundled map-universal (uppo) tiers are listed and playable from the
+        # UI; the legacy single-map ppo-* tiers are no longer offered.
         bots = self.client.get("/api/bots").json()["bots"]
-        self.assertIn("ppo-easy", bots)
-        self.assertIn("ppo-medium", bots)
-        r = self.client.post("/api/game", json={"ship0": "human", "ship1": "ppo-medium", "seed": 1})
+        self.assertIn("uppo-easy", bots)
+        self.assertIn("uppo-medium", bots)
+        self.assertNotIn("ppo-easy", bots)
+        self.assertNotIn("ppo-medium", bots)
+        r = self.client.post("/api/game", json={"ship0": "human", "ship1": "uppo-medium", "seed": 1})
         self.assertEqual(r.status_code, 200)
         view = r.json()
         gid = view["game_id"]

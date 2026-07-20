@@ -120,6 +120,9 @@ select, input {
 .ship-card:last-child { margin-bottom: 0; }
 .ship-card.p0 { border-color: #ff8a3c55; } .ship-card.p1 { border-color: #2f8bff55; }
 .ship-card.active { box-shadow: 0 0 0 2px var(--gold) inset; }
+/* Rival card in player view: only their PUBLIC standings (control + lives). */
+.ship-card.rival-public { background: #ffffff05; opacity: 0.85; }
+.ship-card.rival-public .avatar { opacity: 0.7; }
 .ship-card .avatar { width: 46px; height: 46px; flex: 0 0 46px; }
 .ship-card .meta { flex: 1; min-width: 0; }
 .ship-card .name { font-family: 'Baloo 2'; font-weight: 800; font-size: 14px; }

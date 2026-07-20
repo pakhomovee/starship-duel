@@ -2,8 +2,9 @@
 
 Two kinds of competitor:
   * **baselines** -- the bundled reference bots (``random``, ``heuristic``,
-    ``ppo-easy``, ``ppo-medium``), built in-process via ``bots.make_bot``.  These
-    are the opponents used for the during-contest "partial standings".
+    ``hunter``, ``uppo-easy``, ``uppo-medium``, ``uppo``), built in-process via
+    ``bots.make_bot``.  These are the opponents used for the during-contest
+    "partial standings".
   * **bots** -- participant entries, each launched as a subprocess over the
     ``starship_duel.arena`` stdin/stdout protocol (:class:`SubprocessBot`, which
     already enforces per-move timeout -> strike -> forfeit).
@@ -32,8 +33,7 @@ from ..arena import SubprocessBot
 from ..bots import Bot, make_bot
 
 #: Reference bots every tournament includes; also the partial-standings opponents.
-#: The map-universal ``uppo`` tiers play the current game on any map; the legacy
-#: ``ppo-*`` tiers are retained for continuity.
+#: The map-universal ``uppo`` tiers play the current game on any map.
 BASELINES = ("random", "heuristic", "hunter", "uppo-easy", "uppo-medium", "uppo")
 
 _DEFAULT_TIMEOUT = 1.0
