@@ -97,6 +97,10 @@ select, input {
   paint-order: stroke; stroke: #06040f; stroke-width: 4px; }
 .node-jumpable { filter: drop-shadow(0 0 10px var(--cyan)); }
 .jump-ring { fill: none; stroke: var(--cyan); stroke-width: 3.5; stroke-dasharray: 6 7; opacity: .9; }
+/* Snipe target: a red locked-on ring + a clickable reticle over the rival. */
+.snipe-ring { fill: none; stroke: #ff5c5c; stroke-width: 3.5; stroke-dasharray: 3 6; opacity: .95; animation: pulse 1.4s ease-in-out infinite; }
+.snipe-reticle { cursor: pointer; filter: drop-shadow(0 0 4px #ff5c5ccc); }
+.snipe-reticle:hover { filter: drop-shadow(0 0 7px #ff5c5c); }
 .candidate-halo { animation: pulse 1.8s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: .5 } 50% { opacity: .95 } }
 @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
@@ -167,6 +171,8 @@ select, input {
 .act-btn.act-FIRE { border-color: #ff5c5c66; }
 .act-btn.act-END_TURN { border-color: var(--gold); background: #2a2148; grid-column: 1 / -1; justify-content: center; }
 .act-btn.jump-highlight { border-color: var(--cyan); }
+.act-btn.snipe-highlight { border-color: #ff5c5c; background: #3a1830; }
+.act-btn.snipe-highlight .cost { color: #ff8a3c; }
 /* Unaffordable / unavailable: shown but dimmed and non-interactive. */
 .act-btn.disabled { opacity: .34; cursor: not-allowed; filter: grayscale(0.4); }
 .act-btn.disabled:hover { background: var(--panel-2); opacity: .5; }

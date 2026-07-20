@@ -229,6 +229,12 @@ function renderBoard(v) {
   // which systems are jump targets (human turn)
   const jumpDests = new Set((v.legal_actions || []).filter((a) => a.type === "JUMP").map((a) => a.dest));
 
+  // snipe target: a known rival one hop away that Fire can hit (needs Long-Range
+  // Scanners). The server marks the FIRE menu entry with `snipe_target`; the
+  // submitted action is still a plain FIRE (the engine auto-targets the rival).
+  const snipeEntry = (v.action_menu || []).find((a) => a.type === "FIRE" && a.enabled && a.snipe_target);
+  const snipeTarget = snipeEntry ? snipeEntry.snipe_target : null;
+
   // candidate overlay (rival belief) — union of all candidate sets provided
   const candidate = new Set();
   for (const key of Object.keys(v.candidates || {})) for (const s of v.candidates[key]) candidate.add(s);
@@ -246,6 +252,16 @@ function renderBoard(v) {
     g.appendChild(centered(ring, s.x, s.y, ssz + 12, s.fogged ? "fogged-node" : null));
     g.appendChild(centered(`sys-${kind}-${status}`, s.x, s.y, ssz));
     if (jumpDests.has(s.name)) g.appendChild(el("circle", { cx: s.x, cy: s.y, r: ssz / 2 + 9, class: "jump-ring" }));
+    // Snipe reticle: a distinct, clickable Fire-at-adjacent-rival cue. Placed
+    // above the node so it doesn't fight the node's click-to-jump hit area
+    // (the rival's system is also a legal jump destination).
+    if (s.name === snipeTarget) {
+      g.appendChild(el("circle", { cx: s.x, cy: s.y, r: ssz / 2 + 9, class: "snipe-ring" }));
+      const ry = s.y - ssz / 2 - 14 * boardScale;
+      const ret = centered("act-fire", s.x, ry, 34 * boardScale, "snipe-reticle");
+      ret.onclick = (e) => { e.stopPropagation(); humanAction("FIRE", null); };
+      g.appendChild(ret);
+    }
 
     // cache
     if (s.cache) {
@@ -417,6 +433,7 @@ function renderActions(v) {
     // style them and withhold the click handler.
     btn.className = `act-btn act-${a.type}`
       + (a.type === "JUMP" && a.enabled ? " jump-highlight" : "")
+      + (a.snipe_target ? " snipe-highlight" : "")
       + (a.enabled ? "" : " disabled");
     const cost = a.enabled && a.cost ? `<span class="cost">${a.cost}⚡</span>` : "";
     const reason = a.enabled ? "" : `<span class="reason">${a.reason || ""}</span>`;
@@ -439,8 +456,11 @@ function showTip(btn, a) {
   const tip = _tip();
   const cost = a.cost ? `<div class="tip-cost">Cost: ${a.cost}⚡</div>` : "";
   const warn = (!a.enabled && a.reason) ? `<div class="tip-warn">Unavailable — ${a.reason}</div>` : "";
+  const desc = a.snipe_target
+    ? `Long-Range Scanners let this Fire reach the rival one hop away at ${a.snipe_target} — steal control points, capture the ground, and cost them a life without co-locating.`
+    : (ACT_DESC[a.type] || "");
   tip.innerHTML = `<div class="tip-title">${a.label}</div>
-                   <div class="tip-desc">${ACT_DESC[a.type] || ""}</div>${cost}${warn}`;
+                   <div class="tip-desc">${desc}</div>${cost}${warn}`;
   tip.classList.add("show");
   // Anchor the tooltip's right edge just left of the button (sidebar is on the
   // right, so there's room), clamped into the viewport.

@@ -43,6 +43,10 @@ _LABELS = {
 
 
 def _action_cost(session: GameSession, atype: ActionType) -> Optional[int]:
+    # FIRE is priced only in territory-control mode; in assassination mode
+    # (enable_instakill) it's a free instant-kill, so there's no cost to show.
+    if atype is ActionType.FIRE:
+        return None if session.config.enable_instakill else session.config.cost_fire
     attr = _COST_ATTR.get(atype)
     return getattr(session.config, attr) if attr else None
 
@@ -204,6 +208,17 @@ def _action_menu(session: GameSession, obs: Observation) -> List[dict]:
 
     legal = set(obs.legal_actions)  # Action is a frozen dataclass -> hashable
 
+    # A FIRE while the rival is a hop away (and known) is a "snipe": with
+    # Long-Range Scanners, the same FIRE action reaches an adjacent rival instead
+    # of the co-located one (engine ``_do_fire`` auto-targets, so the submitted
+    # action stays a plain ``Action.fire()`` -- adding a dest would be illegal).
+    # Surface it as a distinct, discoverable target rather than a bare "Fire".
+    snipe_target = None
+    rp = obs.rival_position
+    if (obs.unlocked.get("long_range_scanners") and rp is not None
+            and rp != obs.position and rp in obs.adjacency.get(obs.position, [])):
+        snipe_target = rp
+
     catalogue: List[Action] = [Action.jump(d) for d in sorted(obs.adjacency.get(obs.position, []))]
     catalogue += [
         Action.hold(), Action.claim(), Action.fire(),
@@ -217,14 +232,21 @@ def _action_menu(session: GameSession, obs: Observation) -> List[dict]:
     out = []
     for a in catalogue:
         enabled = a in legal
-        out.append({
+        entry = {
             "type": a.type.name,
             "dest": a.dest,
             "label": _LABELS[a.type] + (f" → {a.dest}" if a.dest else ""),
             "cost": _action_cost(session, a.type),
             "enabled": enabled,
             "reason": None if enabled else _disabled_reason(a, obs, session),
-        })
+        }
+        # Relabel the FIRE entry as a snipe when a known rival sits one hop away.
+        # The submission stays FIRE with no dest (the engine targets the rival);
+        # ``snipe_target`` is UI-only, for the label and the map highlight/click.
+        if a.type is ActionType.FIRE and snipe_target is not None:
+            entry["label"] = f"Snipe → {snipe_target}"
+            entry["snipe_target"] = snipe_target
+        out.append(entry)
     return out
 
 
