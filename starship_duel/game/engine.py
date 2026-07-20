@@ -506,8 +506,17 @@ class Engine:
         # Long-Range Scanners widens the sight radius to two hops; refresh the fog
         # immediately so the newly-visible outer ring reveals its current owners
         # this turn, instead of staying stale until the next turn's _start_turn.
+        # Also run the passive rival track NOW (normally done at _start_turn), so
+        # a scanner bought mid-turn pins an in-range rival this turn -- otherwise
+        # its whole point (locating, and the Fire->snipe it enables) wouldn't kick
+        # in until the turn after purchase.
         if flag == "long_range_scanners":
             self._observe_local(s)
+            rival = self.state.ships[other(s)]
+            if (not rival.deep_cloak_active
+                    and rival.position in self._systems_within(ship.position, self.config.lrs_range)):
+                self._see(s, rival.position)
+                events.append(f"ship{s} tracks rival at {rival.position} (long-range scanners)")
 
     # --------------------------------------------------------- exposure/reveal
     def _see(self, observer: ShipId, system: System) -> None:

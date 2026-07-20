@@ -282,6 +282,22 @@ class TestCombat(unittest.TestCase):
         e._start_turn(s)
         self.assertEqual(build_observation(e, s).rival_position, target)  # ...LRS re-pins it
 
+    def test_lrs_pins_in_range_rival_on_unlock(self):
+        # Buying Long-Range Scanners mid-turn must pin an in-range rival THIS turn
+        # (not only at the next _start_turn), so its locating value -- and the
+        # Fire->snipe it enables -- kicks in the moment it's purchased.
+        e = fresh_engine()
+        s = e.current_ship
+        rival = 1 - s
+        e.state.ships[s].energy = e.config.cost_unlock_long_range_scanners
+        n = next(iter(e.map.neighbors(e.state.ships[s].position)))  # adjacent
+        e.state.ships[rival].position = n
+        e.state.ships[rival].cloaked = True
+        e.belief[s].reset(set(e.map.systems))                # belief fully fuzzy
+        from starship_duel.game.types import ActionType
+        e.apply_action(Action(ActionType.UNLOCK_LONG_RANGE_SCANNERS))
+        self.assertEqual(build_observation(e, s).rival_position, n)  # pinned now
+
     def test_lrs_enables_ranged_raid(self):
         e = fresh_engine(fire_domination_steal=5)
         s = e.current_ship

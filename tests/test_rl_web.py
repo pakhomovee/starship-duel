@@ -133,6 +133,41 @@ class TestWebApi(unittest.TestCase):
         self.assertTrue(v["done"])
         self.assertIn(v["winner"], (0, 1, None))
 
+    def test_perspective_log_is_fogged(self):
+        # The event log is view-specific: truth sees everything; a player's view
+        # hides the cloaked rival's private actions and never leaks the rival's
+        # exact position beyond what that player legitimately knows.
+        from starship_duel.game import build_observation
+        from starship_duel.web.session import GameSession, _event_actor
+
+        disclose = ("jumps to", "claims", "exposed", "tracked at",
+                    "captures", "RAIDS at", "SNIPES at")
+        hidden_any = 0
+        for seed in range(12):
+            g = GameSession({0: "heuristic", 1: "random"}, seed=seed)
+            guard = 0
+            while not g.env.done and guard < 400:
+                mover = g.current_ship
+                opp = 1 - mover
+                n0 = len(g.event_records)
+                g.step_bot()
+                guard += 1
+                opp_knows = build_observation(g.env.engine, opp).rival_position
+                mv_pos = g.env.engine.state.ships[mover].position
+                for rec in g.event_records[n0:]:
+                    t = rec["text"]
+                    if _event_actor(t) == mover and any(x in t for x in disclose) and mv_pos in t:
+                        if opp in rec["audience"]:
+                            # A line pinning the mover is only shown to the foe
+                            # when the foe actually knows the mover's position.
+                            self.assertEqual(opp_knows, mv_pos, f"leak: {t!r}")
+                truth = set(g.events_for("truth", limit=10_000))
+                for me in (0, 1):
+                    mine = set(g.events_for(me, limit=10_000))
+                    self.assertLessEqual(mine, truth)      # subset of truth
+                    hidden_any += len(truth) - len(mine)
+        self.assertGreater(hidden_any, 0)                  # fog actually hid things
+
     def test_human_action_and_illegal(self):
         r = self.client.post("/api/game", json={"ship0": "human", "ship1": "heuristic", "seed": 2})
         view = r.json()

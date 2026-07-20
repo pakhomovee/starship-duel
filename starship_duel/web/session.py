@@ -9,10 +9,11 @@ can watch it unfold.
 from __future__ import annotations
 
 import itertools
+import re
 import threading
 import time
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from ..bots import Bot, make_bot
 from ..bots.base import BotError
@@ -20,6 +21,39 @@ from ..env import StarshipDuelEnv
 from ..game import Action, ActionType, GameConfig, build_observation
 
 _ids = itertools.count(1)
+
+_SHIP_RE = re.compile(r"^ship(\d)")
+_BOTH: Tuple[int, ...] = (0, 1)
+
+
+def _event_actor(text: str) -> Optional[int]:
+    """The ship a log line leads with (``ship0 ...``), or ``None`` for a global
+    line (skirmish start/timeout, a win, the collapse draw)."""
+    m = _SHIP_RE.match(text)
+    return int(m.group(1)) if m else None
+
+
+def _event_audience(text: str, mover: int, revealed: bool) -> Tuple[int, ...]:
+    """Which ships legitimately witness a log line, for fog-of-war filtering.
+
+    ``mover`` is the ship that acted this ply; ``revealed`` is whether the mover
+    was visible to its opponent during the action (exposed, or the opponent held
+    a hard fix on it). Rules:
+      * Global lines (start / timeout / win / collapse / crash) -> both.
+      * The mover's own lines -> both if it was revealed, else only the mover
+        (a cloaked jump, silent claim or private recon stays hidden).
+      * Lines about the *other* ship (a hit, respawn, a track/detect, a shield)
+        are public consequences -> both.
+    """
+    if (text.startswith("skirmish") or text.startswith("both ships")
+            or "wins skirmish" in text or "crashed" in text):
+        return _BOTH
+    actor = _event_actor(text)
+    if actor is None:
+        return _BOTH
+    if actor == mover:
+        return _BOTH if revealed else (mover,)
+    return _BOTH
 
 
 class GameSession:
@@ -98,10 +132,13 @@ class GameSession:
         for b in self.bots.values():
             b.reset()
         self.events = []
+        # Parallel to ``events``: each line tagged with the ships that may see it,
+        # so the log can be filtered per perspective (full in truth/GT view).
+        self.event_records: List[dict] = []
         st = self.env.engine.state
-        self.events.append(
-            f"skirmish start on {st.map_id}; ship_{st.turn_ship} moves first"
-        )
+        start = f"skirmish start on {st.map_id}; ship_{st.turn_ship} moves first"
+        self.events.append(start)
+        self.event_records.append({"text": start, "audience": _BOTH})
         # Start a fresh replay recording for this skirmish.
         self.record_id = uuid.uuid4().hex[:12]
         self.frames = []
@@ -147,10 +184,35 @@ class GameSession:
             raise ValueError(f"illegal action {action_type} {dest or ''}".strip())
         return self._step(action)
 
+    def _rival_sees(self, observer: int, target: int) -> bool:
+        """Does ``observer`` currently hold a hard fix on ``target``'s exact
+        system -- ``target`` exposed, or ``observer``'s belief pinned to it?
+        This is what lets the observer legitimately witness ``target``'s move."""
+        eng = self.env.engine
+        tgt = eng.state.ships[target]
+        if not tgt.cloaked:
+            return True
+        bt = eng.belief[observer]
+        return bt.is_pinned and tgt.position in bt.candidates
+
     def _step(self, action: Action) -> List[str]:
+        mover = self.current_ship
+        opp = 1 - mover
+        # Was the mover visible to its opponent during this action? ``seen_after``
+        # (the opponent knows where it ended up) always counts. ``seen_before``
+        # counts only for a *stationary* action -- for a cloaked JUMP the opponent
+        # saw the old system but NOT the destination, so it must not leak here.
+        moved = action.type is ActionType.JUMP
+        seen_before = self._rival_sees(opp, mover)
         self.env.step(action)
+        seen_after = self._rival_sees(opp, mover)
+        revealed = seen_after or (seen_before and not moved)
         evs = list(self.env.last_events)
         self.events.extend(evs)
+        for text in evs:
+            self.event_records.append(
+                {"text": text, "audience": _event_audience(text, mover, revealed)}
+            )
         self._record()
         return evs
 
@@ -170,10 +232,23 @@ class GameSession:
         except BotError as e:
             # A crashing bot automatically loses.
             self.env.engine.forfeit(ship, reason="crash")
-            self.events.append(f"ship{ship} crashed ({e}) — forfeits")
+            crash = f"ship{ship} crashed ({e}) — forfeits"
+            self.events.append(crash)
+            self.event_records.append({"text": crash, "audience": _BOTH})
             self._record()
             return list(self.events[-1:])
         return self._step(action)
 
     def recent_events(self, limit: int = 40) -> List[str]:
         return self.events[-limit:]
+
+    def events_for(self, perspective, limit: int = 40) -> List[str]:
+        """Recent log lines visible from ``perspective`` (``"truth"`` sees all;
+        a ship id sees only the lines it legitimately witnessed)."""
+        recs = self.event_records
+        if perspective == "truth":
+            texts = [r["text"] for r in recs]
+        else:
+            me = int(perspective)
+            texts = [r["text"] for r in recs if me in r["audience"]]
+        return texts[-limit:]

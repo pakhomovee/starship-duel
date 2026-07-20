@@ -100,7 +100,7 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
         "lives_max": session.config.lives,
         "systems": systems,
         "edges": edges,
-        "events": session.recent_events(),
+        "events": session.events_for(perspective),
         "awaiting_human": session.is_human_turn(),
         "can_step": (not st.done) and session.controllers[st.turn_ship] != "human",
     }
