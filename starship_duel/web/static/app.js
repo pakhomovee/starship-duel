@@ -302,7 +302,9 @@ function renderShip(sh, x, y, size) {
   size = size || 46;
   g.appendChild(centered(warm ? "ship-warm-flame" : "ship-cool-flame", x, y + 5, size));
   const body = centered(warm ? "ship-warm" : "ship-cool", x, y, size);
-  if (sh.cloaked) body.setAttribute("opacity", "0.5");
+  // Keep a cloaked ship clearly visible — the cloak aura/sparkles already
+  // signal the state, so only hint at transparency rather than fading it out.
+  if (sh.cloaked) body.setAttribute("opacity", "0.82");
   g.appendChild(body);
   if (sh.cloaked) g.appendChild(centered("fx-cloak", x, y, size * 1.1));
   else g.appendChild(centered("fx-exposed", x + size * 0.34, y - size * 0.44, 22));
