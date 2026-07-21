@@ -30,7 +30,7 @@ from typing import Dict, List
 import numpy as np
 
 from ...game import Observation
-from ..encoders import _RIVAL_ACTION_VOCAB  # reuse the rival-last-action vocab
+from ..encoders import _RIVAL_ACTION_VOCAB, rival_action_index  # reuse the rival-action vocab
 
 # Hard cap on systems per map (pad target).  The current maps are 11-16 systems;
 # 32 leaves generous headroom.  Adding a larger map means bumping this and
@@ -197,11 +197,8 @@ class GraphObsEncoder:
         g[i] = min(obs.turn_number / 200.0, 1.0); i += 1
         me, them = obs.campaign_score[obs.ship_id], obs.campaign_score[1 - obs.ship_id]
         g[i] = float(np.clip((me - them) / 5.0, -1.0, 1.0)); i += 1
-        try:
-            k = _RIVAL_ACTION_VOCAB.index(obs.rival_last_action)
-        except ValueError:
-            k = 0
-        g[i + k] = 1.0; i += len(_RIVAL_ACTION_VOCAB)
+        g[i + rival_action_index(obs.rival_last_action)] = 1.0
+        i += len(_RIVAL_ACTION_VOCAB)
         g[i] = min(self.n / float(self.max_systems), 1.0); i += 1
         g[i] = min(len(obs.binary_systems) / 5.0, 1.0); i += 1
 

@@ -144,6 +144,7 @@ def serialize(session: GameSession, perspective: Union[str, int] = "truth") -> d
         view["hud"] = [_obs_hud(obs, me)]
         view["rival_unlocked"] = obs.rival_unlocked
         view["rival_last_action"] = obs.rival_last_action
+        view["rival_last_turn_actions"] = obs.rival_last_turn_actions
         view["legal_actions"] = (
             _legal_actions(session, obs) if view["awaiting_human"] else []
         )

@@ -447,7 +447,9 @@ Key `Observation` fields (see [`game/observation.py`](game/observation.py)):
 `position`, `cloaked`, `energy`, `banked_overcharge`, `actions_remaining`,
 `unlocked` (self-private); `domination` + `domination_target`, **`lives` +
 `rival_lives`**, `system_status`, `system_cache`, `adjacency`, `binary_systems`,
-`rival_unlocked`, `rival_last_action` (public); **`system_owner` is fogged** —
+`rival_unlocked`, `rival_last_turn_actions` (every action of the rival's last
+turn, with `UNKNOWN`/`JAMMED` for the ones you could not identify) and its
+convenience alias `rival_last_action` (public); **`system_owner` is fogged** —
 only systems in **`owner_known`** are actually sensed, the rest are unknown (a
 deep-cloaked rival can be claiming territory you can't see). And the hidden-info
 signals: **`rival_position`** — the rival's *exact* system,

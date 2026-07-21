@@ -19,8 +19,8 @@ stdin, calls your function, and writes one JSON action per line to stdout.
 `request` fields: turn, your_id, map_id, domination_target,
 you{position,cloaked,deep_cloak_turns_left,energy,banked_overcharge,
 actions_remaining,unlocked,lives,domination},
-rival{known_position,last_seen,moves_since_seen,unlocked,last_action,lives,
-domination}, map{adjacency,binary_systems}, systems{name:{owner,owner_known,
+rival{known_position,last_seen,moves_since_seen,unlocked,last_turn_actions,
+last_action,lives,domination}, map{adjacency,binary_systems}, systems{name:{owner,owner_known,
 status,binary,cache,collapse_in}}, campaign_score, skirmish,
 legal_actions[{action,target?}]. Reply with one legal action object, e.g.
 {"action":"JUMP","target":"Veyra"} or {"action":"HOLD"} — or {"index": k} to

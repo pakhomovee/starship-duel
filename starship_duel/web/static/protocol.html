@@ -166,7 +166,8 @@
     <span class="k">"known_position"</span>: <span class="s">"Kestrel Binary"</span>,  <span class="c">// null unless known for certain</span>
     <span class="k">"last_seen"</span>: <span class="s">"Kestrel Binary"</span>,       <span class="c">// last confirmed system, or null</span>
     <span class="k">"moves_since_seen"</span>: <span class="n">0</span>,              <span class="c">// hops it could have made since</span>
-    <span class="k">"last_action"</span>: <span class="s">"JUMP"</span>,              <span class="c">// what it publicly did, or null</span>
+    <span class="k">"last_turn_actions"</span>: [<span class="s">"UNKNOWN"</span>, <span class="s">"CLAIM"</span>],  <span class="c">// its whole last turn, in order</span>
+    <span class="k">"last_action"</span>: <span class="s">"CLAIM"</span>,             <span class="c">// the last entry above, or null</span>
     <span class="k">"lives"</span>: <span class="n">3</span>,
     <span class="k">"domination"</span>: <span class="n">31</span>,
     <span class="k">"unlocked"</span>: {<span class="k">"proximity_alert"</span>: <span class="n">false</span>, …}
@@ -221,7 +222,8 @@
             <tr><td class="t">known_position</td><td data-i18n="p.f_known">Their exact system, but only while it is known for certain. Otherwise <code>null</code>.</td></tr>
             <tr><td class="t">last_seen</td><td data-i18n="p.f_lastseen">The last system they were confirmed in, or <code>null</code> if never.</td></tr>
             <tr><td class="t">moves_since_seen</td><td data-i18n="p.f_msince">Upper bound on single hops they could have made since. 0 while currently known.</td></tr>
-            <tr><td class="t">last_action</td><td data-i18n="p.f_lastact">The action they last took publicly — masked to a generic value if they run Jamming.</td></tr>
+            <tr><td class="t">last_turn_actions</td><td data-i18n="p.f_lastturn">Every action of their last turn, in order. Ones you could not identify read <code>UNKNOWN</code> (they were hidden) or <code>JAMMED</code> (masked by their Jamming) — so the length still tells you how many actions they spent.</td></tr>
+            <tr><td class="t">last_action</td><td data-i18n="p.f_lastact">The final entry of <code>last_turn_actions</code>, for convenience.</td></tr>
             <tr><td class="t">lives</td><td data-i18n="p.f_rlives">Their remaining lives.</td></tr>
             <tr><td class="t">domination</td><td data-i18n="p.f_rdom">Their control points. Both scores are public.</td></tr>
             <tr><td class="t">unlocked</td><td data-i18n="p.f_runlocked">Which upgrades they have bought.</td></tr>

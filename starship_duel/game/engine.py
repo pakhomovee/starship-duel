@@ -293,8 +293,9 @@ class Engine:
         }[action.type]
         handler(s, action, events)
 
-        # Public action log (jam-aware) for the rival's observation (spec 3).
-        st.ships[s].last_public_action = self._public_category(s, action)
+        # Public action log (fog- and jam-aware) for the rival's observation
+        # (spec 3): one entry per action, in order, for this whole turn.
+        st.ships[s].current_turn_actions.append(self._public_category(s, action))
 
         st.ships[s].actions_remaining -= 1
 
@@ -306,11 +307,40 @@ class Engine:
         return events
 
     def _public_category(self, s: ShipId, action: Action) -> str:
+        """What the rival can tell about ``action`` *after* it has resolved.
+
+        Anything the rival cannot identify collapses to a placeholder rather than
+        disappearing: it still learns that an action was spent, just not which.
+        ``JAMMED`` = deliberately masked by the actor's Jamming; ``UNKNOWN`` = the
+        actor was hidden, so the action left no observable trace.
+        """
+        ship = self.state.ships[s]
+        jamming = ship.unlocked["jamming"]
+
         if action.type in ENERGY_ACTIONS:
-            if self.state.ships[s].unlocked["jamming"]:
-                return "spent Energy"
-            return action.type.value
-        # Jump / Hold / Claim / Fire are always distinguishable.
+            # Energy emissions are detectable at range; Jamming hides which one.
+            return "JAMMED" if jamming else action.type.value
+
+        if action.type is ActionType.FIRE:
+            return "FIRE"  # a weapon discharge is loud, hit or miss
+
+        if action.type is ActionType.CLAIM:
+            # Mirrors ``_do_claim``: a deep-cloaked or jammed claim flips the
+            # system silently, so the rival never sees the ownership change.
+            if jamming:
+                return "JAMMED"
+            if ship.deep_cloak_active:
+                return "UNKNOWN"
+            return "CLAIM"
+
+        # JUMP / HOLD are only distinguishable while the rival still has the hull
+        # in sight once the action has resolved -- then it simply watches where
+        # the ship ended up.  Anything that leaves the ship cloaked is a blank:
+        # a cloaked jump and a cloaked hold look exactly alike, and so does the
+        # HOLD that re-cloaks an exposed ship (all the rival sees is a ship that
+        # is no longer there).  Naming them leaked the rival's every move.
+        if ship.cloaked:
+            return "UNKNOWN"
         return action.type.value
 
     # ---------------------------------------------------------- action effects
@@ -650,6 +680,11 @@ class Engine:
         ship = st.ships[s]
         rival_id = other(s)
         rival = st.ships[rival_id]
+
+        # The turn's public action log is now complete: it becomes what the rival
+        # sees for the whole of ``s``'s last turn, and a fresh log starts.
+        ship.last_turn_actions = ship.current_turn_actions
+        ship.current_turn_actions = []
 
         # Action banking (spec 5a): only the excess beyond the base carries.
         rollover = max(0, ship.actions_remaining - cfg.base_actions)

@@ -48,14 +48,9 @@ class ActionType(Enum):
     END_TURN = "END_TURN"
 
 
-# Which action *categories* a rival can always distinguish, versus the ones
-# that collapse to a generic "spent Energy" when the actor has Jamming (spec 3).
-MOVEMENT_CATEGORIES = {
-    ActionType.JUMP,
-    ActionType.HOLD,
-    ActionType.CLAIM,
-    ActionType.FIRE,
-}
+# Energy-spending actions: what the rival sees of these collapses to a generic
+# "JAMMED" when the actor has Jamming (spec 3).  The rest of the visibility rules
+# live in ``Engine._public_category``.
 ENERGY_ACTIONS = {
     ActionType.SCAN,
     ActionType.DEEP_CLOAK,
@@ -148,13 +143,24 @@ class ShipState:
             "jamming": False,
         }
     )
-    # The category of this ship's most recent action, as the *rival* would see
-    # it (already jam-obfuscated).  ``None`` before the ship has acted.
-    last_public_action: Optional[str] = None
+    # Every action of this ship's most recently completed turn, in order, as the
+    # *rival* would see it: the real category when the rival could identify it,
+    # else "JAMMED" (masked by the actor's Jamming) or "UNKNOWN" (the actor was
+    # hidden, so the action left no observable trace).  Empty before the ship has
+    # finished a turn.  ``current_turn_actions`` accumulates the turn in progress
+    # and is rotated into ``last_turn_actions`` at end-of-turn.
+    last_turn_actions: List[str] = field(default_factory=list)
+    current_turn_actions: List[str] = field(default_factory=list)
 
     @property
     def deep_cloak_active(self) -> bool:
         return self.deep_cloak_turns_left > 0
+
+    @property
+    def last_public_action(self) -> Optional[str]:
+        """The most recent single public category (legacy view of the log)."""
+        log = self.current_turn_actions or self.last_turn_actions
+        return log[-1] if log else None
 
     def clone(self) -> "ShipState":
         return ShipState(
@@ -165,7 +171,8 @@ class ShipState:
             banked_overcharge=self.banked_overcharge,
             actions_remaining=self.actions_remaining,
             unlocked=dict(self.unlocked),
-            last_public_action=self.last_public_action,
+            last_turn_actions=list(self.last_turn_actions),
+            current_turn_actions=list(self.current_turn_actions),
         )
 
 

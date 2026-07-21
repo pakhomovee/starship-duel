@@ -5,6 +5,13 @@ energy, banked overcharge, and hidden position are never included.  The rival's
 exact system is given (as :attr:`Observation.rival_position`) only when it is
 known for certain; the fuzzy "could be here" set is intentionally omitted so
 bots infer it themselves.
+
+The rival's turn is reported as a full list of action categories
+(:attr:`Observation.rival_last_turn_actions`) rather than a single last action:
+what a rival spent its whole turn on is the main read you get on it.  Anything
+this observer could not identify is kept as a ``"JAMMED"`` / ``"UNKNOWN"``
+placeholder instead of being dropped, so the list never lies about *how many*
+actions the rival spent -- see :meth:`Engine._public_category`.
 """
 
 from __future__ import annotations
@@ -44,6 +51,13 @@ class Observation:
     turn_number: int
     turn_clock: float
     rival_unlocked: Dict[str, bool]
+    # Every action of the rival's most recently completed turn, in order, as this
+    # ship perceived it -- with "JAMMED" (masked by the rival's Jamming) or
+    # "UNKNOWN" (the rival was hidden) standing in for the ones it could not
+    # identify.  The count is itself information: it tells you how many actions
+    # the rival spent.  ``rival_last_action`` is just the final entry, kept for
+    # callers that only want the most recent one.
+    rival_last_turn_actions: List[str]
     rival_last_action: Optional[str]
 
     # -- self-private --------------------------------------------------------
@@ -144,7 +158,8 @@ def build_observation(engine: Engine, ship: ShipId) -> Observation:
         turn_number=st.turn_number,
         turn_clock=st.turn_clock,
         rival_unlocked=dict(rival.unlocked),
-        rival_last_action=rival.last_public_action,
+        rival_last_turn_actions=list(rival.last_turn_actions),
+        rival_last_action=(rival.last_turn_actions[-1] if rival.last_turn_actions else None),
         position=me.position,
         cloaked=me.cloaked,
         deep_cloak_turns_left=me.deep_cloak_turns_left,

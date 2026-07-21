@@ -71,6 +71,9 @@ else null.
 and could have travelled up to that many hops since.
 - `rival_estimated_systems` — your best set of where they might be NOW. Treat these as \
 DANGER squares.
+- `rival_last_turn_actions` — every action of their last turn, in order. "UNKNOWN" means \
+they were hidden (a cloaked JUMP and a cloaked HOLD look identical), "JAMMED" means their \
+Jamming masked it — but the count still tells you how many actions they spent.
 You get EXPOSED when you CLAIM, collect a cache (by starting a turn on it), JUMP into a \
 system the rival owns or occupies, or FIRE-and-miss while they hold Proximity Alert. \
 HOLD re-cloaks you — but does NOTHING if you are already cloaked.
@@ -280,7 +283,8 @@ def _build_user_prompt(obs: Observation, legal: List[Action], belief: "BotBelief
         "your_unlocks": my_unlocks,
         "your_recent_actions": list(history or []),
         "rival_unlocks": rival_unlocks,
-        "rival_last_action": obs.rival_last_action,
+        # The rival's whole last turn; "UNKNOWN"/"JAMMED" = we could not tell.
+        "rival_last_turn_actions": obs.rival_last_turn_actions,
         # Exact system only if known for certain; else our own inferred estimate.
         "rival_known_position": obs.rival_position,
         "rival_last_seen": obs.rival_last_seen,

@@ -508,6 +508,87 @@ class TestBelief(unittest.TestCase):
         self.assertFalse(hasattr(obs, "candidate_systems"))
 
 
+class TestPublicActionLog(unittest.TestCase):
+    """What the rival can read off a turn (obs.rival_last_turn_actions)."""
+
+    def _rival_log(self, e, actor):
+        return build_observation(e, 1 - actor).rival_last_turn_actions
+
+    def test_cloaked_jump_is_indistinguishable_from_hold(self):
+        # The bug this guards: a cloaked ship's JUMP used to be reported by name,
+        # handing the rival its every move through the fog.
+        e = fresh_engine()
+        s = e.current_ship
+        self.assertTrue(e.state.ships[s].cloaked)
+        e.apply_action(Action.jump(e.map.neighbors(e.state.ships[s].position)[0]))
+        e.apply_action(Action.hold())  # second action ends the turn
+        self.assertEqual(self._rival_log(e, s), ["UNKNOWN", "UNKNOWN"])
+
+    def test_exposed_moves_are_named(self):
+        e = fresh_engine()
+        s = e.current_ship
+        e.apply_action(Action.claim())  # exposes the ship
+        e.apply_action(Action.jump(e.map.neighbors(e.state.ships[s].position)[0]))
+        self.assertEqual(self._rival_log(e, s), ["CLAIM", "JUMP"])
+
+    def test_whole_turn_is_logged_not_just_the_last_action(self):
+        e = fresh_engine()
+        s = e.current_ship
+        e.state.ships[s].energy = 100
+        e.state.ships[s].actions_remaining = 3
+        e.apply_action(Action.scan())
+        e.apply_action(Action.claim())          # exposes the ship
+        e.apply_action(Action.hold())           # re-cloaks it -> the rival loses it
+        obs = build_observation(e, 1 - s)
+        self.assertEqual(obs.rival_last_turn_actions, ["SCAN", "CLAIM", "UNKNOWN"])
+        self.assertEqual(obs.rival_last_action, "UNKNOWN")  # alias = last entry
+
+    def test_hold_that_recloaks_is_unknown(self):
+        # Vanishing is not the same as being seen to sit still: once the ship is
+        # cloaked again the rival cannot tell the HOLD from a JUMP either.
+        e = fresh_engine()
+        s = e.current_ship
+        e.apply_action(Action.claim())  # exposed
+        e.apply_action(Action.hold())   # re-cloaks
+        self.assertEqual(self._rival_log(e, s), ["CLAIM", "UNKNOWN"])
+
+    def test_log_rotates_per_turn(self):
+        e = fresh_engine()
+        s = e.current_ship
+        e.apply_action(Action.claim())
+        e.apply_action(Action.end_turn())  # END_TURN itself is not logged
+        self.assertEqual(self._rival_log(e, s), ["CLAIM"])
+        e.apply_action(Action.end_turn())  # rival's turn, s starts again
+        e.apply_action(Action.hold())
+        e.apply_action(Action.hold())
+        self.assertEqual(self._rival_log(e, s), ["UNKNOWN", "UNKNOWN"])
+
+    def test_jamming_masks_energy_actions_and_claims(self):
+        e = fresh_engine()
+        s = e.current_ship
+        e.state.ships[s].unlocked["jamming"] = True
+        e.state.ships[s].energy = 100
+        e.apply_action(Action.scan())
+        e.apply_action(Action.claim())  # silent expansion
+        self.assertEqual(self._rival_log(e, s), ["JAMMED", "JAMMED"])
+
+    def test_deep_cloaked_claim_is_unknown(self):
+        e = fresh_engine()
+        s = e.current_ship
+        e.state.ships[s].energy = 100
+        e.apply_action(Action.deep_cloak())
+        e.apply_action(Action.claim())  # invisible expansion
+        self.assertEqual(self._rival_log(e, s), ["DEEP_CLOAK", "UNKNOWN"])
+
+    def test_fire_is_always_public(self):
+        e = fresh_engine(enable_instakill=False)
+        s = e.current_ship
+        e.state.ships[s].energy = 100
+        e.apply_action(Action.fire())  # misses; the shot is still heard
+        e.apply_action(Action.hold())
+        self.assertEqual(self._rival_log(e, s)[0], "FIRE")
+
+
 class TestDeepCloak(unittest.TestCase):
     def test_immune_to_exposure_triggers(self):
         e = fresh_engine()

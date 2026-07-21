@@ -15,7 +15,8 @@ def render_observation(obs: Observation) -> str:
                  f"banked_overcharge={obs.banked_overcharge}")
     lines.append(f"Your unlocks: {', '.join(k for k, v in obs.unlocked.items() if v) or 'none'}")
     lines.append(f"Rival unlocks: {', '.join(k for k, v in obs.rival_unlocked.items() if v) or 'none'}")
-    lines.append(f"Rival last action: {obs.rival_last_action}")
+    lines.append("Rival last turn: "
+                 f"{', '.join(obs.rival_last_turn_actions) or '-'}")
     if obs.rival_position is not None:
         lines.append(f"Rival KNOWN at: {obs.rival_position}")
     else:

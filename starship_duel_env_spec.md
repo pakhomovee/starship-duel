@@ -67,8 +67,18 @@ Public to both ships:
 - **`domination` (both ships) and `domination_target`** — the control race is open
 - **`lives` and `rival_lives`** — the hunt is open
 - `campaign_score`, `turn_ship`, `turn_number`, `turn_clock`
-- rival's `unlocked` flags, and rival's last action *category* (Jamming collapses
-  the actor's Energy actions to a generic "spent Energy")
+- rival's `unlocked` flags, and `rival_last_turn_actions` — the *category* of
+  every action of the rival's last completed turn, in order.  Categories the
+  observer cannot identify are not dropped, they collapse to a placeholder, so
+  the length always tells you how many actions the rival spent:
+  - `"JAMMED"` — deliberately masked by the actor's Jamming (its Energy
+    actions, and its silent claims)
+  - `"UNKNOWN"` — the actor ended the action cloaked, so it left no trace.
+    **`JUMP` and `HOLD` are only named while the actor is exposed afterwards**:
+    a cloaked jump and a cloaked hold look identical, and so does the `HOLD`
+    that re-cloaks an exposed ship (all you see is a ship that is gone).  A
+    deep-cloaked `CLAIM` is invisible too.  `FIRE` is always public (a discharge
+    is loud), and so is any action that exposed the actor.
 
 Fogged (per observer):
 - **`system_owner`** — only what this ship has sensed. A ship senses the true
@@ -112,7 +122,7 @@ actions. Costs are current defaults (Energy).
 | `OVERCHARGE` | **6** | Bank +1 extra action for next turn; repeatable/stackable. |
 | `UNLOCK_PROXIMITY_ALERT` | **6** | Permanent. **Capture shield**: the ground under your ship can't be captured (unless the raider jams). **Radar**: a rival moving adjacent to your ship is revealed — **pierces deep cloak**. |
 | `UNLOCK_LONG_RANGE_SCANNERS` | **10** | Permanent. **Ranged raid** (fire one hop away), **2-hop** ownership vision, and passive tracking of a rival within `lrs_range` (2) hops. |
-| `UNLOCK_JAMMING` | **8** | Permanent. **Silent expansion** (all your claims stay hidden), **blinds** the rival's Proximity Alert (radar + shield), and hides your territory from the rival's Scan; your Energy actions also show only as "spent Energy". |
+| `UNLOCK_JAMMING` | **8** | Permanent. **Silent expansion** (all your claims stay hidden), **blinds** the rival's Proximity Alert (radar + shield), and hides your territory from the rival's Scan; your Energy actions also show only as "JAMMED". |
 
 ### Ability rock-paper-scissors
 

@@ -13,7 +13,7 @@ reads hidden rival state -- only what the observation already exposes.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -22,14 +22,25 @@ from ..game import ActionType, Observation
 # Per-system one-hot / scalar features (see _encode_systems).
 PER_SYSTEM = 16
 
-# Categories a rival's last public action can collapse to (spec 3).
+# Categories a rival's last public action can collapse to (spec 3).  Slot 0
+# doubles as the catch-all: it covers both "the rival has not acted yet" and
+# "UNKNOWN" (an action we could not identify) -- the width is frozen so the
+# shipped checkpoints in ``bots/ppo`` keep loading.
 _RIVAL_ACTION_VOCAB = [
     None,
     "JUMP", "HOLD", "CLAIM", "FIRE",
-    "spent Energy",
+    "JAMMED",
     "SCAN", "DEEP_CLOAK", "OVERCHARGE",
     "UNLOCK_PROXIMITY_ALERT", "UNLOCK_LONG_RANGE_SCANNERS", "UNLOCK_JAMMING",
 ]
+
+
+def rival_action_index(label: Optional[str]) -> int:
+    """One-hot slot for a public action category (0 = unknown/never acted)."""
+    try:
+        return _RIVAL_ACTION_VOCAB.index(label)
+    except ValueError:
+        return 0
 
 
 class ObservationEncoder:
@@ -114,9 +125,5 @@ class ObservationEncoder:
         out[i] = min(obs.turn_number / 200.0, 1.0); i += 1
         me, them = obs.campaign_score[obs.ship_id], obs.campaign_score[1 - obs.ship_id]
         out[i] = float(np.clip((me - them) / 5.0, -1.0, 1.0)); i += 1
-        # rival last action one-hot
-        try:
-            k = _RIVAL_ACTION_VOCAB.index(obs.rival_last_action)
-        except ValueError:
-            k = 0
-        out[i + k] = 1.0
+        # rival last action one-hot (the final action of its last turn)
+        out[i + rival_action_index(obs.rival_last_action)] = 1.0

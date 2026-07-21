@@ -76,6 +76,11 @@ def encode_request(obs: Observation) -> dict:
             "last_seen": obs.rival_last_seen,
             "moves_since_seen": obs.rival_moves_since_seen,
             "unlocked": obs.rival_unlocked,
+            # Every action of the rival's last turn, in order.  Ones you could
+            # not identify read "UNKNOWN" (rival hidden) or "JAMMED" (masked by
+            # its Jamming) -- you still learn how many actions it spent.
+            "last_turn_actions": obs.rival_last_turn_actions,
+            # The final entry of the above, for bots that only want the latest.
             "last_action": obs.rival_last_action,
             "lives": obs.rival_lives,
             "domination": obs.domination[1 - obs.ship_id],
