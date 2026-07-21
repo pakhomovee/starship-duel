@@ -77,7 +77,7 @@ def enqueue_baselines(store: TournamentStore, *, n_each: int = 10,
     return store.add_matches(rows)
 
 
-def enqueue_baselines_for_bot(store: TournamentStore, bot_id: str, *, n_each: int = 4,
+def enqueue_baselines_for_bot(store: TournamentStore, bot_id: str, *, n_each: int = 10,
                               reset: bool = True) -> int:
     """Schedule one bot's baseline evaluation. Returns rows added.
 

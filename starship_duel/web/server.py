@@ -107,13 +107,13 @@ MAX_SUBMISSIONS_PER_DAY = int(os.environ.get("STARSHIP_MAX_SUBMISSIONS_PER_DAY",
 #   * it only ever *enqueues* -- the games are played by the separate worker
 #     processes, so concurrency stays pinned to `worker --workers N`;
 #   * it schedules one bot vs the baselines (6 x N matches), never the O(bots^2)
-#     round robin, and N here is smaller than the admin default;
+#     round robin, so depth grows with uploads rather than with their square;
 #   * a resubmission replaces that bot's queued matches instead of adding to
 #     them, so repeat uploads can't stack up depth (see enqueue_baselines_for_bot).
 # AUTOEVAL_MAX_PENDING is the backstop: past that queue depth the workers are
 # already saturated, so we skip rather than pile on and tell the author.
 AUTOEVAL = os.environ.get("STARSHIP_AUTOEVAL", "1").lower() not in ("0", "false", "no")
-AUTOEVAL_GAMES = int(os.environ.get("STARSHIP_AUTOEVAL_GAMES", "4"))
+AUTOEVAL_GAMES = int(os.environ.get("STARSHIP_AUTOEVAL_GAMES", "10"))
 AUTOEVAL_MAX_PENDING = int(os.environ.get("STARSHIP_AUTOEVAL_MAX_PENDING", "1000"))
 
 # Seed an initial admin so the tournament is manageable out of the box. Set both
