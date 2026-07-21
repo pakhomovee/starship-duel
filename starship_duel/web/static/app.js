@@ -21,20 +21,9 @@ const ACT_ICON = {
 };
 const UNLOCK_BADGE = { proximity_alert: "PROX", long_range_scanners: "LRS", jamming: "JAM" };
 
-// ---- what each action does (shown on hover) --------------------------------
-const ACT_DESC = {
-  JUMP: "Move to an adjacent system. Entering a rival-claimed or rival-occupied system exposes your position.",
-  HOLD: "Stay put and slip back under cloak — the way to disappear again after being spotted.",
-  CLAIM: "Take the system you're standing on for income (binaries pay more) — but claiming exposes your position.",
-  FIRE: "Raid your current system (costs 3⚡, charged hit or miss). On a hit — the rival is here — steal their control points, capture the ground under them, and cost them a life. A deep-cloaked rival is immune.",
-  SCAN: "Free: sweep the ownership map and pin the rival's exact system — unless they are deep-cloaked.",
-  DEEP_CLOAK: "Spend Energy to become undetectable for 2 turns — Scan and Long-Range Scanners sweep right past you and you can't be raided or lose a life (a point-blank Proximity Alert still catches you).",
-  OVERCHARGE: "Spend Energy to bank +1 extra action for next turn (stacks).",
-  UNLOCK_PROXIMITY_ALERT: "Permanent unlock (defensive): a short-range alarm — the rival is revealed (piercing cloak) when they move onto or beside your ship — plus a shield that stops a raid from capturing your territory.",
-  UNLOCK_LONG_RANGE_SCANNERS: "Permanent unlock (offensive): passively track the rival's exact system while they're within 2 hops, see ownership 2 hops out, and Fire can raid a rival one hop away.",
-  UNLOCK_JAMMING: "Permanent unlock: your Energy-spending actions show to the rival only as a generic “spent Energy”, and it blinds their Proximity Alert.",
-  END_TURN: "End your turn now. Any actions beyond the base 2 left unspent are banked for next turn.",
-};
+// Localised strings + server-string rewriting (see static/i18n.js).
+const T = window.I18N;
+const t = (k, v) => T.t(k, v);
 
 // ---- app state -------------------------------------------------------------
 const State = {
@@ -72,10 +61,10 @@ async function boot() {
   const data = await (await fetch(api("/api/bots"))).json();
   const opt = (v, label) => `<option value="${v}">${label}</option>`;
   const opts = () => {
-    let html = `<optgroup label="Built-in">`
+    let html = `<optgroup label="${t("bots.builtin")}">`
       + (data.bots || []).map((b) => opt(b, b)).join("") + `</optgroup>`;
     if ((data.arena || []).length) {
-      html += `<optgroup label="Arena (external)">`
+      html += `<optgroup label="${t("bots.arena")}">`
         + data.arena.map((a) => opt(a, a.replace("arena:", "") + " ⚙")).join("")
         + `</optgroup>`;
     }
@@ -101,7 +90,17 @@ async function boot() {
     wsSend({ cmd: "perspective", value: btn.dataset.persp });
   });
 
+  // Re-render everything in place when the language changes (no page reload,
+  // so a game in progress survives the switch).
+  T.onChange(rerender);
+
   await newGame();
+}
+
+/** Re-paint the current view (live game or replay frame) after a lang switch. */
+function rerender() {
+  if (State.replay) { renderReplayFrame(); return; }
+  if (State.game) { const v = State.game; State.game = null; onView(v); }
 }
 
 function speed() { return (1280 - Number($("#inp-speed").value)) / 1000; }
@@ -180,13 +179,13 @@ function onView(view) {
 }
 
 function renderChips(v) {
-  const modeName = { human_vs_bot: "Human vs Bot", bot_vs_bot: "Bot vs Bot", human_vs_human: "Hotseat" }[v.mode];
+  const modeName = t("mode." + v.mode);
   const cname = (c) => c.replace("arena:", "");
   $("#mode-chip").textContent = `${modeName} · ${cname(v.controllers["0"])} / ${cname(v.controllers["1"])}`;
   const turnChip = $("#turn-chip");
-  if (v.done) { turnChip.textContent = "Skirmish over"; turnChip.style.background = "#3a2140"; turnChip.style.color = "#fff"; }
+  if (v.done) { turnChip.textContent = t("chip.over"); turnChip.style.background = "#3a2140"; turnChip.style.color = "#fff"; }
   else {
-    turnChip.textContent = `P${v.turn_ship + 1} to move · turn ${v.turn_number}`;
+    turnChip.textContent = t("chip.to_move", { n: v.turn_ship + 1, t: v.turn_number });
     turnChip.style.background = v.turn_ship === 0 ? "var(--p1)" : "var(--p2-bright)";
     turnChip.style.color = "var(--ink)";
   }
@@ -331,8 +330,8 @@ function domHtmlFor(id, dom, domTarget) {
   const pct = Math.min(100, Math.round((100 * dom) / domTarget));
   const domCol = id === 0 ? "var(--p1)" : "var(--p2-bright)";
   return `
-      <div class="dom" title="Map control — first to ${domTarget} wins">
-        <span class="dom-label"><svg class="ic-dom" viewBox="0 0 64 64"><use href="#res-domination"/></svg>CONTROL</span>
+      <div class="dom" title="${t("hud.control_t", { n: domTarget })}">
+        <span class="dom-label"><svg class="ic-dom" viewBox="0 0 64 64"><use href="#res-domination"/></svg>${t("hud.control")}</span>
         <div class="dom-bar"><div class="dom-fill" style="width:${pct}%;background:${domCol}"></div></div>
         <span class="dom-num">${dom}/${domTarget}</span>
       </div>`;
@@ -346,7 +345,7 @@ function livesHtmlFor(id, v) {
   let pips = "";
   for (let i = 0; i < livesMax; i++)
     pips += `<svg class="ic-life" viewBox="0 0 24 24"><use href="#${i < livesNow ? "hud-life-filled" : "hud-life-empty"}"/></svg>`;
-  return `<div class="lives" title="Lives — lose all and you're eliminated">${pips}</div>`;
+  return `<div class="lives" title="${t("hud.lives_t")}">${pips}</div>`;
 }
 
 function renderHud(v) {
@@ -357,20 +356,20 @@ function renderHud(v) {
     const card = document.createElement("div");
     card.className = `ship-card p${h.id}` + (v.turn_ship === h.id && !v.done ? " active" : "");
     const known = h.position !== null && h.position !== undefined;
-    const posHtml = known ? `<b>${h.position}</b>` : `<span class="pos-hidden">hidden</span>`;
+    const posHtml = known ? `<b>${h.position}</b>` : `<span class="pos-hidden">${t("hud.hidden")}</span>`;
     const badges = Object.entries(h.unlocked).filter(([, on]) => on)
       .map(([k]) => `<span class="badge">${UNLOCK_BADGE[k]}</span>`).join("");
     const dom = (v.domination && v.domination[h.id]) || 0;
     card.innerHTML = `
       <svg class="avatar" viewBox="0 0 140 140"><use href="#${h.id === 0 ? "ship-warm" : "ship-cool"}"/></svg>
       <div class="meta">
-        <div class="name" style="color:${h.id === 0 ? "var(--p1)" : "var(--p2-bright)"}">Player ${h.id + 1}
-          <span style="color:var(--muted);font-weight:700;font-size:11px">${h.cloaked ? "· cloaked" : "· EXPOSED"}</span></div>
+        <div class="name" style="color:${h.id === 0 ? "var(--p1)" : "var(--p2-bright)"}">${t("hud.player", { n: h.id + 1 })}
+          <span style="color:var(--muted);font-weight:700;font-size:11px">${h.cloaked ? t("hud.cloaked") : t("hud.exposed")}</span></div>
         <div class="stats">
-          <span class="stat">at ${posHtml}</span>
+          <span class="stat">${t("hud.at", { pos: posHtml })}</span>
           <span class="stat"><svg class="ic" viewBox="0 0 64 64"><use href="#res-energy"/></svg><b>${h.energy}</b></span>
-          <span class="stat"><svg class="ic" viewBox="0 0 24 24"><use href="#pip-action"/></svg><b>${h.actions_remaining}</b> act</span>
-          <span class="stat"><svg class="ic" viewBox="0 0 64 64"><use href="#res-overcharge"/></svg><b>${h.banked_overcharge}</b> banked</span>
+          <span class="stat"><svg class="ic" viewBox="0 0 24 24"><use href="#pip-action"/></svg><b>${h.actions_remaining}</b> ${t("hud.act")}</span>
+          <span class="stat"><svg class="ic" viewBox="0 0 64 64"><use href="#res-overcharge"/></svg><b>${h.banked_overcharge}</b> ${t("hud.banked")}</span>
         </div>
         ${domHtmlFor(h.id, dom, domTarget)}
         ${livesHtmlFor(h.id, v)}
@@ -390,8 +389,8 @@ function renderHud(v) {
     card.innerHTML = `
       <svg class="avatar" viewBox="0 0 140 140"><use href="#${rid === 0 ? "ship-warm" : "ship-cool"}"/></svg>
       <div class="meta">
-        <div class="name" style="color:${rid === 0 ? "var(--p1)" : "var(--p2-bright)"}">Player ${rid + 1}
-          <span style="color:var(--muted);font-weight:700;font-size:11px">· rival (public intel)</span></div>
+        <div class="name" style="color:${rid === 0 ? "var(--p1)" : "var(--p2-bright)"}">${t("hud.player", { n: rid + 1 })}
+          <span style="color:var(--muted);font-weight:700;font-size:11px">${t("hud.rival_public")}</span></div>
         ${domHtmlFor(rid, rdom, domTarget)}
         ${livesHtmlFor(rid, v)}
       </div>`;
@@ -409,13 +408,13 @@ function renderActions(v) {
   const hint = $("#action-hint");
 
   if (v.mode === "bot_vs_bot") return;
-  if (v.done) { hint.textContent = "Skirmish over — start a new game."; return; }
+  if (v.done) { hint.textContent = t("hint.over"); return; }
   if (!v.awaiting_human) {
     const who = v.controllers[String(v.turn_ship)];
-    hint.textContent = `${who}'s turn — press Step to watch one action, or Auto to run it.`;
+    hint.textContent = t("hint.bot_turn", { who: cname(who) });
     return;
   }
-  hint.textContent = "Tip: glowing systems are jump targets — click them on the map too.";
+  hint.textContent = t("hint.tip");
 
   const me = v.hud[0];
   for (let i = 0; i < (me ? me.actions_remaining : 0); i++) {
@@ -436,9 +435,9 @@ function renderActions(v) {
       + (a.snipe_target ? " snipe-highlight" : "")
       + (a.enabled ? "" : " disabled");
     const cost = a.enabled && a.cost ? `<span class="cost">${a.cost}⚡</span>` : "";
-    const reason = a.enabled ? "" : `<span class="reason">${a.reason || ""}</span>`;
+    const reason = a.enabled ? "" : `<span class="reason">${T.tReason(a.reason)}</span>`;
     btn.innerHTML = `<svg class="ic" viewBox="0 0 64 64"><use href="#${ACT_ICON[a.type]}"/></svg>
-                     <span class="body"><span class="label">${a.label}</span>${reason}</span>${cost}`;
+                     <span class="body"><span class="label">${T.actLabel(a)}</span>${reason}</span>${cost}`;
     if (a.enabled) btn.onclick = () => { hideTip(); humanAction(a.type, a.dest); };
     btn.addEventListener("mouseenter", () => showTip(btn, a));
     btn.addEventListener("mouseleave", hideTip);
@@ -454,12 +453,13 @@ function _tip() {
 }
 function showTip(btn, a) {
   const tip = _tip();
-  const cost = a.cost ? `<div class="tip-cost">Cost: ${a.cost}⚡</div>` : "";
-  const warn = (!a.enabled && a.reason) ? `<div class="tip-warn">Unavailable — ${a.reason}</div>` : "";
+  const cost = a.cost ? `<div class="tip-cost">${t("tip.cost", { n: a.cost })}</div>` : "";
+  const warn = (!a.enabled && a.reason)
+    ? `<div class="tip-warn">${t("tip.unavailable", { reason: T.tReason(a.reason) })}</div>` : "";
   const desc = a.snipe_target
-    ? `Long-Range Scanners let this Fire reach the rival one hop away at ${a.snipe_target} — steal control points, capture the ground, and cost them a life without co-locating.`
-    : (ACT_DESC[a.type] || "");
-  tip.innerHTML = `<div class="tip-title">${a.label}</div>
+    ? t("desc.SNIPE", { pos: a.snipe_target })
+    : t("desc." + a.type);
+  tip.innerHTML = `<div class="tip-title">${T.actLabel(a)}</div>
                    <div class="tip-desc">${desc}</div>${cost}${warn}`;
   tip.classList.add("show");
   // Anchor the tooltip's right edge just left of the button (sidebar is on the
@@ -482,7 +482,7 @@ function renderLog(v) {
   for (const ev of v.events) {
     const d = document.createElement("div");
     d.className = "ev" + (/wins skirmish/.test(ev) ? " win" : /exposed|FIRES|force-fires|detects/.test(ev) ? " hot" : "");
-    d.textContent = ev;
+    d.textContent = T.tEvent(ev);
     host.appendChild(d);
   }
   host.scrollTop = host.scrollHeight;
@@ -493,10 +493,11 @@ function renderBanner(v) {
   if (!v.done) { b.hidden = true; return; }
   b.hidden = false;
   if (v.winner === null || v.winner === undefined) {
-    b.className = "banner draw"; b.textContent = `Draw — ${v.end_reason}`;
+    b.className = "banner draw";
+    b.textContent = t("banner.draw", { reason: T.tEndReason(v.end_reason) });
   } else {
     b.className = `banner win-${v.winner}`;
-    b.textContent = `Player ${v.winner + 1} wins — ${v.end_reason.replace("_", " ")}`;
+    b.textContent = t("banner.win", { n: v.winner + 1, reason: T.tEndReason(v.end_reason) });
   }
 }
 
@@ -510,51 +511,51 @@ function wireGames() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
 }
 
-const MODE_LABEL = { human_vs_bot: "Human vs Bot", bot_vs_bot: "Bot vs Bot", human_vs_human: "Hotseat" };
 function cname(c) { return String(c).replace("arena:", ""); }
+function locale() { return T.lang() === "ru" ? "ru-RU" : undefined; }
 function fmtWhen(sec) {
   if (!sec) return "—";
   const d = new Date(sec * 1000);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(locale(), { month: "short", day: "numeric" })
+    + " " + d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }
 function outcomeText(g) {
-  if (g.winner === 0 || g.winner === 1) return `P${g.winner + 1} won`;
-  return "Draw";
+  if (g.winner === 0 || g.winner === 1) return t("games.won", { n: g.winner + 1 });
+  return t("games.draw");
 }
 
 async function openGames() {
   const overlay = $("#games-overlay");
   overlay.hidden = false;
   const host = $("#games-list");
-  host.innerHTML = `<div class="games-empty">Loading…</div>`;
+  host.innerHTML = `<div class="games-empty">${t("games.loading")}</div>`;
   let games = [];
   try {
     games = (await (await fetch(api("/api/games"))).json()).games || [];
   } catch (e) {
-    host.innerHTML = `<div class="games-empty">Could not load games.</div>`;
+    host.innerHTML = `<div class="games-empty">${t("games.load_fail")}</div>`;
     return;
   }
   if (!games.length) {
-    host.innerHTML = `<div class="games-empty">No games recorded yet — finish a skirmish and it'll show up here.</div>`;
+    host.innerHTML = `<div class="games-empty">${t("games.empty")}</div>`;
     return;
   }
   host.replaceChildren();
   for (const g of games) {
     const row = document.createElement("div");
     row.className = "game-row";
-    const players = `${cname(g.controllers["0"])} vs ${cname(g.controllers["1"])}`;
+    const players = `${cname(g.controllers["0"])} — ${cname(g.controllers["1"])}`;
     const winCls = g.winner === 0 ? "win-0" : g.winner === 1 ? "win-1" : "draw";
     row.innerHTML = `
       <span class="game-when">${fmtWhen(g.created)}</span>
       <div class="game-main">
         <div class="game-players">${players}</div>
-        <div class="game-sub">${MODE_LABEL[g.mode] || g.mode} · ${g.map_id} · ${g.plies} plies · ${(g.end_reason || "").replace(/_/g, " ")}</div>
+        <div class="game-sub">${t("mode." + g.mode)} · ${g.map_id} · ${t("games.plies", { n: g.plies })} · ${T.tEndReason(g.end_reason)}</div>
       </div>
       <span class="game-outcome ${winCls}">${outcomeText(g)}</span>
       <div class="game-actions">
-        <button class="btn btn-primary act-watch">Watch ▶</button>
-        <button class="btn btn-danger act-del" title="Delete">🗑</button>
+        <button class="btn btn-primary act-watch">${t("games.watch")}</button>
+        <button class="btn btn-danger act-del" title="${t("games.delete")}">🗑</button>
       </div>`;
     row.querySelector(".act-watch").onclick = () => startReplay(g.rid);
     row.querySelector(".act-del").onclick = async () => {
@@ -586,8 +587,8 @@ async function startReplay(rid) {
   let data;
   try {
     data = await (await fetch(api(`/api/games/${rid}/replay`))).json();
-  } catch (e) { alert("Could not load replay."); return; }
-  if (!data.frames || !data.frames.length) { alert("Empty replay."); return; }
+  } catch (e) { alert(t("games.replay_fail")); return; }
+  if (!data.frames || !data.frames.length) { alert(t("games.replay_empty")); return; }
 
   closeWs();                       // detach from any live game
   $("#games-overlay").hidden = true;
@@ -665,7 +666,7 @@ function exitReplay() {
 // ---- util ------------------------------------------------------------------
 async function postJSON(url, body) {
   const r = await fetch(api(url), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) { const t = await r.text(); alert("Error: " + t); throw new Error(t); }
+  if (!r.ok) { const msg = await r.text(); alert(t("err.prefix") + msg); throw new Error(msg); }
   return r.json();
 }
 

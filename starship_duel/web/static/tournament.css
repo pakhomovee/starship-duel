@@ -36,7 +36,7 @@
 /* segmented control (scope toggle) */
 .seg { display: inline-flex; background: var(--panel-2); border: 1px solid #ffffff22; border-radius: 12px; padding: 3px; }
 .seg-btn {
-  font-family: 'Baloo 2'; font-weight: 700; font-size: 13px; cursor: pointer;
+  font-family: 'Baloo 2', 'Comfortaa'; font-weight: 700; font-size: 13px; cursor: pointer;
   color: var(--muted); background: transparent; border: 0; border-radius: 9px; padding: 6px 14px;
 }
 .seg-btn.is-on { color: #fff; background: linear-gradient(180deg, var(--violet), #6c5ce0); }
@@ -49,7 +49,7 @@
 }
 .board-table td { padding: 9px 10px; border-bottom: 1px solid #ffffff10; }
 .board-table tr:hover td { background: #ffffff08; }
-.board-table .rank { color: var(--gold); font-weight: 800; font-family: 'Baloo 2'; }
+.board-table .rank { color: var(--gold); font-weight: 800; font-family: 'Baloo 2', 'Comfortaa'; }
 .board-table .num { font-family: 'JetBrains Mono', monospace; text-align: right; }
 .board-table .muted { color: var(--muted); }
 
@@ -84,7 +84,7 @@
 .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .admin-card { background: #ffffff08; border: 1px solid #ffffff14; border-radius: 12px; padding: 14px 16px; }
 .admin-card.wide { grid-column: 1 / -1; }
-.admin-card h3 { margin: 0 0 10px; font-family: 'Baloo 2'; font-size: 16px; }
+.admin-card h3 { margin: 0 0 10px; font-family: 'Baloo 2', 'Comfortaa'; font-size: 16px; }
 .admin-card .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .chk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); }
 

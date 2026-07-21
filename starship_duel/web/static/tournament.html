@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Starship Duel — Tournament</title>
+<title data-i18n-doctitle="t.title">Starship Duel — Tournament</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css?v=12">
-<link rel="stylesheet" href="/static/tournament.css?v=12">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Comfortaa:wght@600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css?v=13">
+<link rel="stylesheet" href="/static/tournament.css?v=13">
+<script src="/static/i18n.js?v=1"></script>
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -17,15 +18,17 @@
   <div class="brand">
     <svg class="brand-logo" width="40" height="40"><use href="#tour-logo"/></svg>
     <div>
-      <span class="brand-kicker">Bot Ladder</span>
-      <h1>Starship&nbsp;Duel — Tournament</h1>
+      <span class="brand-kicker" data-i18n="t.kicker">Bot Ladder</span>
+      <h1 data-i18n-html="t.h1">Starship&nbsp;Duel — Tournament</h1>
     </div>
   </div>
   <div class="setup" id="auth-area">
     <!-- filled by tournament.js: either a login form or a user chip -->
   </div>
   <div class="setup">
-    <a class="btn btn-ghost" href="/">▸ Play</a>
+    <a class="btn btn-ghost" href="/" data-i18n="nav.play">▸ Play</a>
+    <a class="btn btn-ghost" href="/rules" data-i18n="nav.rules" data-i18n-title="nav.rules_t">Rules ?</a>
+    <div data-lang-switch></div>
   </div>
 </header>
 
@@ -33,27 +36,27 @@
   <!-- Leaderboard (public) -->
   <section class="panel" id="board-panel">
     <div class="panel-head">
-      <h2>Standings</h2>
+      <h2 data-i18n="t.standings">Standings</h2>
       <div class="seg" id="scope-seg">
-        <button class="seg-btn is-on" data-scope="quick">Live (partial)</button>
-        <button class="seg-btn" data-scope="full">Final (all-pairs)</button>
+        <button class="seg-btn is-on" data-scope="quick" data-i18n="t.scope_quick">Live (partial)</button>
+        <button class="seg-btn" data-scope="full" data-i18n="t.scope_full">Final (all-pairs)</button>
       </div>
       <span class="stamp" id="board-stamp"></span>
     </div>
-    <div id="board-body"><p class="hint">Loading…</p></div>
+    <div id="board-body"><p class="hint" data-i18n="t.loading">Loading…</p></div>
   </section>
 
   <!-- Submit a bot (logged-in) -->
   <section class="panel" id="submit-panel" hidden>
-    <h2>Your bot</h2>
-    <p class="hint">Upload a single-file bot — <code>.py</code> (Python) or
+    <h2 data-i18n="t.your_bot">Your bot</h2>
+    <p class="hint" data-i18n-html="t.submit_lead">Upload a single-file bot — <code>.py</code> (Python) or
       <code>.cpp</code> (C++, compiled on the server). It's scanned, smoke-tested
       against <b>random</b>, and — if it passes — becomes your active entry. Use the
       bundled SDK (<code>starship_sdk</code> / <code>starship_bot.hpp</code>) or speak
       the JSON protocol directly.</p>
     <div class="uploader">
       <input type="file" id="sub-file" accept=".py,.cpp,.cc,.cxx">
-      <button class="btn btn-primary" id="sub-upload"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#tour-upload"/></svg>Submit bot</button>
+      <button class="btn btn-primary" id="sub-upload"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#tour-upload"/></svg><span data-i18n="t.submit_btn">Submit bot</span></button>
       <span id="sub-result" class="sub-result"></span>
     </div>
     <div id="my-subs" class="subs-list"></div>
@@ -61,43 +64,43 @@
 
   <!-- Admin -->
   <section class="panel" id="admin-panel" hidden>
-    <h2>Admin</h2>
+    <h2 data-i18n="t.admin_h">Admin</h2>
     <div class="admin-grid">
       <div class="admin-card">
-        <h3>Create user</h3>
+        <h3 data-i18n="t.create_user">Create user</h3>
         <div class="row">
-          <input id="nu-name" placeholder="username" title="Login name for the new account (must be unique).">
-          <input id="nu-pass" type="password" placeholder="password" title="Initial password for the new account.">
-          <label class="chk" title="Grant this user admin rights (tournament control, user management, all submissions)."><input type="checkbox" id="nu-admin"> admin</label>
-          <button class="btn" id="nu-create" title="Create the account with the name and password above.">Create</button>
+          <input id="nu-name" placeholder="username" data-i18n-ph="t.username" data-i18n-title="t.username_t" title="Login name for the new account (must be unique).">
+          <input id="nu-pass" type="password" placeholder="password" data-i18n-ph="t.password" data-i18n-title="t.password_t" title="Initial password for the new account.">
+          <label class="chk" data-i18n-title="t.admin_chk_t" title="Grant this user admin rights (tournament control, user management, all submissions)."><input type="checkbox" id="nu-admin"> <span data-i18n="t.admin">admin</span></label>
+          <button class="btn" id="nu-create" data-i18n="t.create" data-i18n-title="t.create_t" title="Create the account with the name and password above.">Create</button>
         </div>
         <span id="nu-result" class="hint"></span>
         <div id="users-list" class="mini-list"></div>
       </div>
 
       <div class="admin-card">
-        <h3>Tournament control</h3>
+        <h3 data-i18n="t.control">Tournament control</h3>
         <div class="row">
-          <label title="How many games to schedule per pairing (split evenly between who moves first).">Games each <input id="sched-n" type="number" value="10" min="1" style="width:70px"></label>
-          <button class="btn" id="sched-base" title="Queue matches of every active bot against the reference baselines (random, heuristic, hunter, uppo…). This is the cheap, continuous ladder that drives the Live standings. Idempotent: only tops each pairing up to “Games each”.">Schedule vs baselines</button>
-          <button class="btn" id="sched-full" title="Queue the full all-pairs round-robin between every active bot — the heavier post-deadline evaluation behind the Final standings. Idempotent: only adds the missing games.">Schedule full round-robin</button>
+          <label data-i18n-title="t.games_each_t" title="How many games to schedule per pairing (split evenly between who moves first)."><span data-i18n="t.games_each">Games each</span> <input id="sched-n" type="number" value="10" min="1" style="width:70px"></label>
+          <button class="btn" id="sched-base" data-i18n="t.sched_base" data-i18n-title="t.sched_base_t" title="Queue matches of every active bot against the reference baselines (random, heuristic, hunter, uppo…). This is the cheap, continuous ladder that drives the Live standings. Idempotent: only tops each pairing up to “Games each”.">Schedule vs baselines</button>
+          <button class="btn" id="sched-full" data-i18n="t.sched_full" data-i18n-title="t.sched_full_t" title="Queue the full all-pairs round-robin between every active bot — the heavier post-deadline evaluation behind the Final standings. Idempotent: only adds the missing games.">Schedule full round-robin</button>
         </div>
         <div class="row">
-          <button class="btn" id="recompute-quick" title="Re-fit the Bradley-Terry ratings over all finished matches and refresh the Live (partial) standings snapshot. Does not run any matches.">Recompute live</button>
-          <button class="btn" id="recompute-full" title="Re-fit ratings and refresh the Final (all-pairs) standings snapshot. Does not run any matches.">Recompute final</button>
-          <span id="queue-status" class="hint" title="Current match-queue state. “error” means matches that failed to run — check the “Not yet ranked” list in Standings for the reason."></span>
+          <button class="btn" id="recompute-quick" data-i18n="t.recompute_quick" data-i18n-title="t.recompute_quick_t" title="Re-fit the Bradley-Terry ratings over all finished matches and refresh the Live (partial) standings snapshot. Does not run any matches.">Recompute live</button>
+          <button class="btn" id="recompute-full" data-i18n="t.recompute_full" data-i18n-title="t.recompute_full_t" title="Re-fit ratings and refresh the Final (all-pairs) standings snapshot. Does not run any matches.">Recompute final</button>
+          <span id="queue-status" class="hint" data-i18n-title="t.queue_t" title="Current match-queue state. “error” means matches that failed to run — check the “Not yet ranked” list in Standings for the reason."></span>
         </div>
         <span id="admin-msg" class="hint"></span>
       </div>
 
       <div class="admin-card wide">
-        <h3>All submissions</h3>
+        <h3 data-i18n="t.all_subs">All submissions</h3>
         <div id="all-subs" class="mini-list"></div>
       </div>
     </div>
   </section>
 </main>
 
-<script src="/static/tournament.js?v=12"></script>
+<script src="/static/tournament.js?v=13"></script>
 </body>
 </html>

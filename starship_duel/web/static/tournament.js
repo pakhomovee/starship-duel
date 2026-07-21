@@ -43,6 +43,9 @@ async function api(path, opts = {}) {
   return body;
 }
 
+const T = window.I18N;
+const t = (k, v) => T.t(k, v);
+
 const State = { me: null, scope: "quick" };
 
 // -------------------------------------------------------------- auth ---------
@@ -53,15 +56,15 @@ function renderAuth() {
     const chip = el("span", "user-chip");
     chip.append(icon("tour-user", "chip-user", 18));
     chip.append(el("b", null, State.me.username));
-    if (State.me.is_admin) chip.append(el("span", "badge badge-admin", "admin"));
+    if (State.me.is_admin) chip.append(el("span", "badge badge-admin", t("t.admin")));
     box.append(chip);
-    const out = el("button", "btn btn-ghost", "Log out");
+    const out = el("button", "btn btn-ghost", t("t.logout"));
     out.onclick = async () => { await api("/api/logout", { method: "POST" }); await refreshMe(); };
     box.append(out);
   } else {
-    const u = el("input"); u.placeholder = "username"; u.id = "li-user";
-    const p = el("input"); p.type = "password"; p.placeholder = "password"; p.id = "li-pass";
-    const b = el("button", "btn btn-primary", "Log in");
+    const u = el("input"); u.placeholder = t("t.username"); u.id = "li-user";
+    const p = el("input"); p.type = "password"; p.placeholder = t("t.password"); p.id = "li-pass";
+    const b = el("button", "btn btn-primary", t("t.login"));
     const err = el("span", "hint auth-err");
     const submit = async () => {
       err.textContent = "";
@@ -71,7 +74,7 @@ function renderAuth() {
           body: JSON.stringify({ username: u.value, password: p.value }),
         });
         await refreshMe();
-      } catch (e) { err.textContent = e.message || "login failed"; }
+      } catch (e) { err.textContent = e.message || t("t.login_failed"); }
     };
     b.onclick = submit;
     p.onkeydown = (e) => { if (e.key === "Enter") submit(); };
@@ -97,20 +100,21 @@ async function loadStandings() {
     renderStandings(body, data);
   } catch (e) {
     body.innerHTML = "";
-    body.append(el("p", "hint", "Could not load standings: " + e.message));
+    body.append(el("p", "hint", t("t.standings_fail", { err: e.message })));
   }
 }
 
+function locale() { return T.lang() === "ru" ? "ru-RU" : undefined; }
 function fmt(x) { return (x >= 0 ? "+" : "") + x.toFixed(2); }
 
 function renderStandings(body, data) {
   body.innerHTML = "";
   const stamp = $("#board-stamp");
   stamp.textContent = data.computed
-    ? "updated " + new Date(data.computed * 1000).toLocaleString()
-    : "not computed yet";
+    ? t("t.updated", { when: new Date(data.computed * 1000).toLocaleString(locale()) })
+    : t("t.not_computed");
   if (!data.rows || !data.rows.length) {
-    body.append(el("p", "hint", "No matches scored yet."));
+    body.append(el("p", "hint", t("t.no_matches")));
     return;
   }
   const BASES = ["random", "heuristic", "hunter", "uppo", "uppo-easy", "ppo-easy", "ppo-medium"];
@@ -122,7 +126,8 @@ function renderStandings(body, data) {
   if (ranked.length) {
     const table = el("table", "board-table");
     const head = el("tr");
-    ["#", "Competitor", "Score", "90% CI", "W–L", "Games"].forEach((h) => head.append(el("th", null, h)));
+    ["t.col_rank", "t.col_competitor", "t.col_score", "t.col_ci", "t.col_wl", "t.col_games"]
+      .forEach((k) => head.append(el("th", null, t(k))));
     table.append(head);
     for (const r of ranked) {
       const tr = el("tr");
@@ -134,7 +139,7 @@ function renderStandings(body, data) {
       const name = el("td");
       name.append(icon("tour-bot", "row-avatar", 22));
       name.append(el("b", null, r.id));
-      if (isBase) name.append(el("span", "badge", "baseline"));
+      if (isBase) name.append(el("span", "badge", t("t.baseline")));
       tr.append(name);
       tr.append(el("td", "num", fmt(r.score)));
       tr.append(el("td", "num muted", `[${fmt(r.ci_low)}, ${fmt(r.ci_high)}]`));
@@ -149,21 +154,21 @@ function renderStandings(body, data) {
   // disappears, with the reason (all draws, still pending, or a launch error).
   if (unranked.length) {
     const wrap = el("div", "unranked");
-    wrap.append(el("h3", "unranked-head", "Not yet ranked"));
+    wrap.append(el("h3", "unranked-head", t("t.unranked")));
     for (const r of unranked) {
       const row = el("div", "sub-row");
       row.append(icon("tour-bot", "row-avatar", 20));
       row.append(el("b", null, r.id));
       let why;
-      if (r.errored) why = `${r.errored} match${r.errored === 1 ? "" : "es"} failed to run`;
-      else if (r.n_games) why = `${r.draws || r.n_games} played, no decisive result yet`;
-      else if (r.pending) why = `${r.pending} match${r.pending === 1 ? "" : "es"} queued`;
-      else why = "no matches yet";
+      if (r.errored) why = t("t.why_errored", { n: r.errored });
+      else if (r.n_games) why = t("t.why_drawn", { n: r.draws || r.n_games });
+      else if (r.pending) why = t("t.why_pending", { n: r.pending });
+      else why = t("t.why_none");
       row.append(el("span", "badge badge-bad", why));
       const games = (r.wins || 0) + (r.losses || 0) + (r.draws || 0);
-      if (games) row.append(el("span", "sub-when", `${r.wins}–${r.losses}–${r.draws} (W–L–D)`));
+      if (games) row.append(el("span", "sub-when", t("t.wld", { w: r.wins, l: r.losses, d: r.draws })));
       if (r.last_error) {
-        const msg = el("span", "sub-msg", "error: " + r.last_error);
+        const msg = el("span", "sub-msg", t("t.error_prefix", { msg: r.last_error }));
         msg.title = r.last_error;  // full text on hover
         row.append(msg);
       }
@@ -176,17 +181,18 @@ function renderStandings(body, data) {
 // ------------------------------------------------------- submissions ---------
 function statusBadge(s) {
   const cls = { validated: "badge-ok", rejected: "badge-bad", pending: "badge" }[s.status] || "badge";
-  return el("span", "badge " + cls, s.status + (s.active ? " · active" : ""));
+  const label = T.has("t.status_" + s.status) ? t("t.status_" + s.status) : s.status;
+  return el("span", "badge " + cls, label + (s.active ? t("t.active_suffix") : ""));
 }
 
 function renderSubs(container, subs, showUser) {
   container.innerHTML = "";
-  if (!subs.length) { container.append(el("p", "hint", "No submissions yet.")); return; }
+  if (!subs.length) { container.append(el("p", "hint", t("t.no_subs"))); return; }
   for (const s of subs) {
     const row = el("div", "sub-row");
     row.append(icon(LANG_ICON(s.filename || s.kind), "sub-lang", 20));
     if (showUser) row.append(el("b", "sub-user", s.username));
-    row.append(el("span", "sub-when", new Date(s.created * 1000).toLocaleString()));
+    row.append(el("span", "sub-when", new Date(s.created * 1000).toLocaleString(locale())));
     if (s.status === "validated") row.append(icon("tour-verified", "sub-ok", 18));
     row.append(statusBadge(s));
     if (s.message) row.append(el("span", "sub-msg", s.message));
@@ -204,19 +210,19 @@ async function loadMySubmissions() {
 async function uploadBot() {
   const f = $("#sub-file").files[0];
   const out = $("#sub-result");
-  if (!f) { out.textContent = "Choose a .py file first."; out.className = "sub-result bad"; return; }
-  out.textContent = "Validating…"; out.className = "sub-result";
+  if (!f) { out.textContent = t("t.choose_file"); out.className = "sub-result bad"; return; }
+  out.textContent = t("t.validating"); out.className = "sub-result";
   const fd = new FormData();
   fd.append("file", f, f.name);
   try {
     const r = await api("/api/submissions", { method: "POST", body: fd });
-    out.textContent = (r.status === "validated" ? "✓ " : "✗ ") + r.status +
+    out.textContent = (r.status === "validated" ? "✓ " : "✗ ") + (T.has("t.status_" + r.status) ? t("t.status_" + r.status) : r.status) +
       (r.message ? " — " + r.message : "");
     out.className = "sub-result " + (r.status === "validated" ? "ok" : "bad");
     loadMySubmissions();
     loadStandings();
   } catch (e) {
-    out.textContent = e.message || "upload failed";
+    out.textContent = e.message || t("t.upload_failed");
     out.className = "sub-result bad";
   }
 }
@@ -229,7 +235,7 @@ async function loadUsers() {
     for (const u of data.users) {
       const row = el("div", "sub-row");
       row.append(el("b", null, u.username));
-      if (u.is_admin) row.append(el("span", "badge badge-admin", "admin"));
+      if (u.is_admin) row.append(el("span", "badge badge-admin", t("t.admin")));
       box.append(row);
     }
   } catch (_) {}
@@ -246,8 +252,9 @@ async function loadQueue() {
   try {
     const data = await api("/api/tournament/matches?limit=1");
     const c = data.counts || {};
-    $("#queue-status").textContent =
-      `queue: ${c.pending || 0} pending · ${c.running || 0} running · ${c.done || 0} done · ${c.error || 0} error`;
+    $("#queue-status").textContent = t("t.queue", {
+      pending: c.pending || 0, running: c.running || 0, done: c.done || 0, error: c.error || 0,
+    });
   } catch (_) {}
 }
 
@@ -261,19 +268,19 @@ async function createUser() {
         is_admin: $("#nu-admin").checked,
       }),
     });
-    out.textContent = "created"; $("#nu-name").value = ""; $("#nu-pass").value = "";
+    out.textContent = t("t.created"); $("#nu-name").value = ""; $("#nu-pass").value = "";
     loadUsers();
-  } catch (e) { out.textContent = e.message || "failed"; }
+  } catch (e) { out.textContent = e.message || t("t.failed"); }
 }
 
 async function adminPost(path, msg) {
   const out = $("#admin-msg");
-  out.textContent = "…";
+  out.textContent = t("t.working");
   try {
     const r = await api(path, { method: "POST" });
     out.textContent = msg(r);
     loadQueue(); loadStandings();
-  } catch (e) { out.textContent = e.message || "failed"; }
+  } catch (e) { out.textContent = e.message || t("t.failed"); }
 }
 
 // -------------------------------------------------------------- wire up ------
@@ -282,21 +289,27 @@ function init() {
     const btn = e.target.closest(".seg-btn");
     if (!btn) return;
     State.scope = btn.dataset.scope;
-    document.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("is-on", b === btn));
+    $("#scope-seg").querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("is-on", b === btn));
     loadStandings();
   });
   $("#sub-upload").onclick = uploadBot;
   $("#nu-create").onclick = createUser;
   $("#sched-base").onclick = () =>
     adminPost("/api/tournament/schedule/baselines?n_each=" + ($("#sched-n").value || 10),
-      (r) => `scheduled ${r.added} baseline matches`);
+      (r) => t("t.sched_base_ok", { n: r.added }));
   $("#sched-full").onclick = () =>
     adminPost("/api/tournament/schedule/full?n_each=" + ($("#sched-n").value || 10),
-      (r) => `scheduled ${r.added} round-robin matches`);
+      (r) => t("t.sched_full_ok", { n: r.added }));
   $("#recompute-quick").onclick = () =>
-    adminPost("/api/tournament/recompute?scope=quick", (r) => `recomputed live (${r.rows.length} ranked)`);
+    adminPost("/api/tournament/recompute?scope=quick", (r) => t("t.recomputed_quick", { n: r.rows.length }));
   $("#recompute-full").onclick = () =>
-    adminPost("/api/tournament/recompute?scope=full", (r) => `recomputed final (${r.rows.length} ranked)`);
+    adminPost("/api/tournament/recompute?scope=full", (r) => t("t.recomputed_full", { n: r.rows.length }));
+
+  // Re-render the dynamic panels when the language changes.
+  T.onChange(() => { renderAuth(); loadStandings(); if (State.me && State.me.authenticated) {
+    loadMySubmissions();
+    if (State.me.is_admin) { loadUsers(); loadAllSubs(); loadQueue(); }
+  } });
 
   loadSprites();
   refreshMe();

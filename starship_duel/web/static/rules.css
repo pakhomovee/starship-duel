@@ -31,7 +31,7 @@ body {
   text-transform: uppercase;
 }
 .hero h1 {
-  font-family: 'Baloo 2'; font-weight: 800; font-size: clamp(34px, 6vw, 58px);
+  font-family: 'Baloo 2', 'Comfortaa'; font-weight: 800; font-size: clamp(34px, 6vw, 58px);
   margin: 8px 0 6px; letter-spacing: .5px;
   background: linear-gradient(180deg, #fff, var(--violet-soft));
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -50,7 +50,7 @@ body {
 .sec { margin-top: 56px; }
 .sec-head { text-align: center; margin-bottom: 22px; }
 .sec-head h2 {
-  font-family: 'Baloo 2'; font-weight: 800; font-size: 26px; margin: 0 0 6px;
+  font-family: 'Baloo 2', 'Comfortaa'; font-weight: 800; font-size: 26px; margin: 0 0 6px;
 }
 .sec-head p { margin: 0 auto; max-width: 560px; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .sec-head .num {
@@ -67,7 +67,7 @@ body {
   display: flex; flex-direction: column; gap: 10px;
 }
 .win-card .emblem { height: 96px; display: flex; align-items: center; justify-content: center; }
-.win-card h3 { font-family: 'Baloo 2'; font-weight: 800; font-size: 19px; margin: 0; }
+.win-card h3 { font-family: 'Baloo 2', 'Comfortaa'; font-weight: 800; font-size: 19px; margin: 0; }
 .win-card h3 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 .win-card p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--violet-soft); }
 
@@ -107,7 +107,7 @@ body {
 .act-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
 .act-title { display: flex; align-items: center; gap: 10px; }
 .act-title .ic { width: 26px; height: 26px; flex: none; }
-.act-title h3 { font-family: 'Baloo 2'; font-weight: 800; font-size: 17px; margin: 0; flex: 1; }
+.act-title h3 { font-family: 'Baloo 2', 'Comfortaa'; font-weight: 800; font-size: 17px; margin: 0; flex: 1; }
 .cost {
   font: 800 12px 'Nunito'; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
   background: #123a52; color: var(--cyan); border: 1px solid #5ce0ff44;
@@ -137,7 +137,7 @@ body {
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid #ffffff1a; border-radius: 18px; padding: 18px 20px;
 }
-.panel-card h3 { font-family: 'Baloo 2'; font-weight: 800; font-size: 18px; margin: 0 0 8px; }
+.panel-card h3 { font-family: 'Baloo 2', 'Comfortaa'; font-weight: 800; font-size: 18px; margin: 0 0 8px; }
 .panel-card p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.6; color: var(--violet-soft); }
 .panel-card .scene { border-radius: 12px; border: 1px solid #ffffff14; margin-top: 10px; }
 .panel-card ul { margin: 6px 0 0; padding-left: 18px; }

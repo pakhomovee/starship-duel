@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Starship Duel</title>
+<title data-i18n-doctitle="index.title">Starship Duel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css?v=10">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Comfortaa:wght@600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css?v=13">
+<script src="/static/i18n.js?v=1"></script>
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -15,7 +16,7 @@
 
 <header class="topbar">
   <div class="brand">
-    <span class="brand-kicker">Neon Constellation</span>
+    <span class="brand-kicker" data-i18n="index.kicker">Neon Constellation</span>
     <h1>Starship&nbsp;Duel</h1>
   </div>
   <div class="setup" id="setup">
@@ -25,22 +26,23 @@
     <label>P2
       <select id="sel-ship1"></select>
     </label>
-    <label>Seed
-      <input id="inp-seed" type="number" placeholder="random" style="width:90px">
+    <label><span data-i18n="index.seed">Seed</span>
+      <input id="inp-seed" type="number" placeholder="random" data-i18n-ph="index.seed_ph" style="width:90px">
     </label>
-    <button id="btn-new" class="btn btn-primary">New Game</button>
-    <button id="btn-games" class="btn btn-ghost" title="Browse & replay past games">Games ▤</button>
-    <a href="/tournament" class="btn btn-ghost" title="Bot ladder & leaderboard">Tournament ♛</a>
-    <a href="/rules" class="btn btn-ghost" title="How to play — the field guide">Rules ?</a>
+    <button id="btn-new" class="btn btn-primary" data-i18n="index.new_game">New Game</button>
+    <button id="btn-games" class="btn btn-ghost" data-i18n="index.games" data-i18n-title="index.games_t" title="Browse & replay past games">Games ▤</button>
+    <a href="/tournament" class="btn btn-ghost" data-i18n="nav.tournament" data-i18n-title="nav.tournament_t" title="Bot ladder & leaderboard">Tournament ♛</a>
+    <a href="/rules" class="btn btn-ghost" data-i18n="nav.rules" data-i18n-title="nav.rules_t" title="How to play — the field guide">Rules ?</a>
+    <div data-lang-switch></div>
   </div>
 </header>
 
 <!-- Past-games browser (opened via the Games button) -->
 <div id="games-overlay" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="games-title">
-    <button id="btn-games-close" class="modal-close" aria-label="Close">✕</button>
-    <h2 id="games-title">Past games</h2>
-    <p class="modal-lead">Every finished skirmish is recorded. Pick one to watch its replay.</p>
+    <button id="btn-games-close" class="modal-close" aria-label="Close" data-i18n-title="games.close">✕</button>
+    <h2 id="games-title" data-i18n="games.title">Past games</h2>
+    <p class="modal-lead" data-i18n="games.lead">Every finished skirmish is recorded. Pick one to watch its replay.</p>
     <div id="games-list" class="games-list"></div>
   </div>
 </div>
@@ -51,32 +53,32 @@
       <div id="mode-chip" class="chip">—</div>
       <div id="turn-chip" class="chip chip-turn">—</div>
       <div class="watch-controls" id="watch-controls" hidden>
-        <button id="btn-step" class="btn">Step ▷</button>
-        <button id="btn-play" class="btn">Auto ▶</button>
-        <button id="btn-pause" class="btn" hidden>Stop ⏸</button>
-        <label class="speed">Speed
+        <button id="btn-step" class="btn" data-i18n="watch.step">Step ▷</button>
+        <button id="btn-play" class="btn" data-i18n="watch.play">Auto ▶</button>
+        <button id="btn-pause" class="btn" data-i18n="watch.pause" hidden>Stop ⏸</button>
+        <label class="speed"><span data-i18n="watch.speed">Speed</span>
           <input id="inp-speed" type="range" min="80" max="1200" value="500" step="20">
         </label>
-        <div class="seg persp-seg" id="persp-seg" title="Watch through a ship's fog of war">
-          <button class="seg-btn is-on" data-persp="truth">Truth</button>
-          <button class="seg-btn" data-persp="0">P1 view</button>
-          <button class="seg-btn" data-persp="1">P2 view</button>
+        <div class="seg persp-seg" id="persp-seg" data-i18n-title="watch.persp_t" title="Watch through a ship's fog of war">
+          <button class="seg-btn is-on" data-persp="truth" data-i18n="watch.truth">Truth</button>
+          <button class="seg-btn" data-persp="0" data-i18n="watch.p1view">P1 view</button>
+          <button class="seg-btn" data-persp="1" data-i18n="watch.p2view">P2 view</button>
         </div>
       </div>
-      <button id="btn-reset" class="btn btn-ghost">Reset</button>
+      <button id="btn-reset" class="btn btn-ghost" data-i18n="index.reset">Reset</button>
     </div>
     <div class="replay-bar" id="replay-bar" hidden>
-      <span class="replay-tag">REPLAY</span>
-      <button id="rp-prev" class="btn" title="Previous action">◀</button>
-      <button id="rp-play" class="btn">Play ▶</button>
-      <button id="rp-pause" class="btn" hidden>Pause ⏸</button>
-      <button id="rp-next" class="btn" title="Next action">▶</button>
+      <span class="replay-tag" data-i18n="replay.tag">REPLAY</span>
+      <button id="rp-prev" class="btn" data-i18n-title="replay.prev" title="Previous action">◀</button>
+      <button id="rp-play" class="btn" data-i18n="replay.play">Play ▶</button>
+      <button id="rp-pause" class="btn" data-i18n="replay.pause" hidden>Pause ⏸</button>
+      <button id="rp-next" class="btn" data-i18n-title="replay.next" title="Next action">▶</button>
       <input id="rp-slider" type="range" min="0" max="0" value="0" step="1" class="replay-slider">
       <span id="rp-counter" class="replay-counter">0 / 0</span>
-      <label class="speed">Speed
+      <label class="speed"><span data-i18n="watch.speed">Speed</span>
         <input id="rp-speed" type="range" min="80" max="1200" value="500" step="20">
       </label>
-      <button id="rp-exit" class="btn btn-ghost">✕ Exit</button>
+      <button id="rp-exit" class="btn btn-ghost" data-i18n="replay.exit">✕ Exit</button>
     </div>
     <svg id="board" viewBox="0 0 1000 780" preserveAspectRatio="xMidYMid meet"></svg>
     <div id="banner" class="banner" hidden></div>
@@ -84,23 +86,23 @@
 
   <aside class="side">
     <div class="panel" id="hud-panel">
-      <h2>Ships</h2>
+      <h2 data-i18n="panel.ships">Ships</h2>
       <div id="hud"></div>
     </div>
 
     <div class="panel" id="action-panel">
-      <h2>Your move <span id="actions-pips" class="pips"></span></h2>
+      <h2><span data-i18n="panel.your_move">Your move</span> <span id="actions-pips" class="pips"></span></h2>
       <div id="actions" class="actions"></div>
       <p id="action-hint" class="hint"></p>
     </div>
 
     <div class="panel" id="log-panel">
-      <h2>Log</h2>
+      <h2 data-i18n="panel.log">Log</h2>
       <div id="log" class="log"></div>
     </div>
   </aside>
 </main>
 
-<script src="/static/app.js?v=10"></script>
+<script src="/static/app.js?v=13"></script>
 </body>
 </html>
