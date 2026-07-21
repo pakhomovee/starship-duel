@@ -35,7 +35,13 @@ from ..bots import REGISTRY
 from ..game import GameConfig
 from ..game.maps import MAPS
 from ..tournament import BotRegistry, TournamentStore
-from ..tournament.accounts import AccountStore, smoke_test, static_scan
+from ..tournament.accounts import (
+    AccountStore,
+    BuildError,
+    smoke_test,
+    source_text,
+    static_scan,
+)
 from ..tournament.schedule import (
     enqueue_baselines,
     enqueue_baselines_for_bot,
@@ -538,9 +544,35 @@ def my_submissions(request: Request):
 
 
 @app.get("/api/admin/submissions")
-def all_submissions(request: Request):
+def all_submissions(request: Request, limit: int = 25, offset: int = 0):
+    """One page of the submission log, newest first, plus the total for paging."""
     _require_admin(request)
-    return {"submissions": ACCOUNTS.list_all_submissions()}
+    limit = max(1, min(int(limit), 200))
+    offset = max(0, int(offset))
+    return {"submissions": ACCOUNTS.list_all_submissions(limit=limit, offset=offset),
+            "total": ACCOUNTS.count_all_submissions(),
+            "limit": limit, "offset": offset}
+
+
+@app.get("/api/admin/submissions/{sub_id}/code")
+def submission_code(request: Request, sub_id: int):
+    """The source of one submission, for admin review.
+
+    Served as JSON text (never as a file the browser might run or render) and
+    only for the single-file source types the arena accepts -- anything else is
+    refused by ``source_text`` rather than dumped.
+    """
+    _require_admin(request)
+    sub = ACCOUNTS.get_submission(sub_id)
+    if sub is None:
+        raise HTTPException(404, f"no submission {sub_id}")
+    try:
+        code = source_text(bytes(sub["code"]), sub["filename"])
+    except BuildError as e:
+        raise HTTPException(415, str(e))
+    return {"id": sub["id"], "username": sub["username"], "filename": sub["filename"],
+            "status": sub["status"], "created": sub["created"],
+            "active": bool(sub["active"]), "code": code}
 
 
 @app.get("/api/tournament/standings")

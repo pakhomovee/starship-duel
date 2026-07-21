@@ -156,6 +156,23 @@ def _relax_perms_for_container(work_dir: Path, files=(), execs=()) -> None:
         pass
 
 
+def source_text(code: bytes, filename: Optional[str]) -> str:
+    """Decode a submission for *reading* (the admin source viewer).
+
+    Only the single-file source types the arena accepts are ever readable, so an
+    unnamed or unknown-extension blob is refused rather than dumped as text --
+    the same allowlist that decides what can run decides what can be viewed.
+    Undecodable bytes become U+FFFD instead of raising: a mangled encoding should
+    still be inspectable.
+    """
+    if not filename:
+        raise BuildError("submission has no filename; refusing to display it")
+    _language_for(filename)  # raises BuildError on anything but .py / .cpp
+    if b"\0" in code:
+        raise BuildError("submission looks binary, not source; refusing to display it")
+    return code.decode("utf-8", errors="replace")
+
+
 def build_command(code: bytes, filename: Optional[str], work_dir: Path, name: str,
                   sandbox: "Optional[SandboxSpec]" = None) -> List[str]:
     """Materialize a submission and return the argv that runs it.
@@ -430,13 +447,23 @@ class AccountStore:
             ).fetchall()
         return [self._summary(r) for r in rows]
 
-    def list_all_submissions(self) -> List[dict]:
+    def list_all_submissions(self, limit: Optional[int] = None,
+                             offset: int = 0) -> List[dict]:
+        """Newest first.  ``limit=None`` returns every row (legacy callers);
+        pass a limit to page through with :meth:`count_all_submissions`."""
+        sql = ("SELECT id,user_id,username,filename,file_hash,status,message,active,created "
+               "FROM submissions ORDER BY created DESC")
+        args: tuple = ()
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            args = (int(limit), max(0, int(offset)))
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT id,user_id,username,filename,file_hash,status,message,active,created "
-                "FROM submissions ORDER BY created DESC"
-            ).fetchall()
+            rows = conn.execute(sql, args).fetchall()
         return [self._summary(r) for r in rows]
+
+    def count_all_submissions(self) -> int:
+        with self._connect() as conn:
+            return int(conn.execute("SELECT COUNT(*) FROM submissions").fetchone()[0])
 
     def active_submissions(self) -> List[dict]:
         """Active validated bots, with their source, for the match registry.

@@ -337,6 +337,62 @@ class TestAuthApi(unittest.TestCase):
                              files={"file": ("bot.py", b"print(1)\n", "text/x-python")})
         self.assertEqual(r.status_code, 401)
 
+    # -- admin submission log: paging + source viewer -----------------------
+    def _seed_submissions(self, n):
+        """``n`` rejected uploads (rejection is instant -- no smoke game)."""
+        self._login("admin", "adminpw")
+        self.client.post("/api/admin/users", json={"username": "gale", "password": "pw"})
+        self.client.post("/api/logout")
+        self._login("gale", "pw")
+        for i in range(n):
+            self.client.post("/api/submissions", files={
+                "file": (f"bot{i}.py", f"import os  # {i}\n".encode(), "text/x-python")})
+        self.client.post("/api/logout")
+        self._login("admin", "adminpw")
+
+    def test_admin_submissions_are_paged_newest_first(self):
+        self._seed_submissions(7)
+        p1 = self.client.get("/api/admin/submissions?limit=3&offset=0").json()
+        self.assertEqual(p1["total"], 7)
+        self.assertEqual(len(p1["submissions"]), 3)
+        self.assertEqual([s["filename"] for s in p1["submissions"]],
+                         ["bot6.py", "bot5.py", "bot4.py"])  # newest first
+        p3 = self.client.get("/api/admin/submissions?limit=3&offset=6").json()
+        self.assertEqual([s["filename"] for s in p3["submissions"]], ["bot0.py"])
+        # Past the end is empty, not an error.
+        self.assertEqual(self.client.get(
+            "/api/admin/submissions?limit=3&offset=99").json()["submissions"], [])
+
+    def test_admin_can_read_submission_source(self):
+        self._seed_submissions(1)
+        sub = self.client.get("/api/admin/submissions").json()["submissions"][0]
+        r = self.client.get(f"/api/admin/submissions/{sub['id']}/code")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["code"], "import os  # 0\n")
+        self.assertEqual(r.json()["username"], "gale")
+        self.assertEqual(self.client.get(
+            "/api/admin/submissions/999999/code").status_code, 404)
+
+    def test_submission_source_is_admin_only(self):
+        self._seed_submissions(1)
+        sub = self.client.get("/api/admin/submissions").json()["submissions"][0]
+        self.client.post("/api/logout")
+        # Anonymous, and then the author themselves: source is admin-only.
+        self.assertEqual(self.client.get(
+            f"/api/admin/submissions/{sub['id']}/code").status_code, 403)
+        self._login("gale", "pw")
+        self.assertEqual(self.client.get(
+            f"/api/admin/submissions/{sub['id']}/code").status_code, 403)
+
+    def test_non_source_submission_is_not_dumped(self):
+        # Only the single-file source types the arena accepts are viewable; a
+        # binary blob is refused rather than served back as text.
+        self._login("admin", "adminpw")
+        sub_id = self.server.ACCOUNTS.add_submission(
+            1, "admin", "bot.exe", b"MZ\x00\x90binary")
+        r = self.client.get(f"/api/admin/submissions/{sub_id}/code")
+        self.assertEqual(r.status_code, 415)
+
 
 if __name__ == "__main__":
     unittest.main()

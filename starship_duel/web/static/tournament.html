@@ -98,11 +98,30 @@
       <div class="admin-card wide">
         <h3 data-i18n="t.all_subs">All submissions</h3>
         <div id="all-subs" class="mini-list"></div>
+        <div class="pager" id="subs-pager">
+          <button class="btn btn-sm" id="subs-prev" data-i18n="t.prev">Previous</button>
+          <span class="hint" id="subs-range"></span>
+          <button class="btn btn-sm" id="subs-next" data-i18n="t.next">Next</button>
+        </div>
       </div>
     </div>
   </section>
 </main>
 
-<script src="/static/tournament.js?v=13"></script>
+<!-- Admin source viewer. The code is inserted with textContent only: a
+     submission is untrusted text and must never be parsed as markup. -->
+<div class="code-modal" id="code-modal" hidden>
+  <div class="code-box" role="dialog" aria-modal="true" aria-labelledby="code-title">
+    <div class="code-head">
+      <b id="code-title"></b>
+      <span class="hint" id="code-sub"></span>
+      <button class="btn btn-sm" id="code-copy" data-i18n="t.copy">Copy</button>
+      <button class="btn btn-sm" id="code-close" data-i18n="t.close">Close</button>
+    </div>
+    <pre class="code-body" id="code-body"></pre>
+  </div>
+</div>
+
+<script src="/static/tournament.js?v=14"></script>
 </body>
 </html>

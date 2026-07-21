@@ -193,6 +193,10 @@ function statusBadge(s) {
   return el("span", "badge " + cls, label + (s.active ? t("t.active_suffix") : ""));
 }
 
+// Only single-file source is ever viewable; the server enforces the same
+// allowlist, this just avoids offering a button that would 415.
+const VIEWABLE = (name) => /\.(py|cpp|cc|cxx|c\+\+)$/i.test(name || "");
+
 function renderSubs(container, subs, showUser) {
   container.innerHTML = "";
   if (!subs.length) { container.append(el("p", "hint", t("t.no_subs"))); return; }
@@ -204,8 +208,55 @@ function renderSubs(container, subs, showUser) {
     if (s.status === "validated") row.append(icon("tour-verified", "sub-ok", 18));
     row.append(statusBadge(s));
     if (s.message) row.append(el("span", "sub-msg", s.message));
+    if (showUser && VIEWABLE(s.filename)) {
+      const view = el("button", "btn btn-sm sub-view", t("t.view_code"));
+      view.title = s.filename || "";
+      view.addEventListener("click", () => showCode(s.id));
+      row.append(view);
+    }
     container.append(row);
   }
+}
+
+// ---------------------------------------------------- admin source viewer ----
+async function showCode(id) {
+  const modal = $("#code-modal");
+  $("#code-title").textContent = "…";
+  $("#code-sub").textContent = "";
+  $("#code-body").textContent = t("t.loading");
+  modal.hidden = false;
+  try {
+    const d = await api("/api/admin/submissions/" + id + "/code");
+    $("#code-title").textContent = d.username + " — " + (d.filename || "");
+    $("#code-sub").textContent = new Date(d.created * 1000).toLocaleString(locale())
+      + " · " + d.status + (d.active ? t("t.active_suffix") : "");
+    // textContent, never innerHTML: this is untrusted source, not markup.
+    $("#code-body").textContent = d.code;
+  } catch (e) {
+    $("#code-title").textContent = t("t.view_code");
+    $("#code-body").textContent = e.message || String(e);
+  }
+}
+
+function closeCode() {
+  $("#code-modal").hidden = true;
+  $("#code-body").textContent = "";
+}
+
+function wireCodeModal() {
+  $("#code-close").addEventListener("click", closeCode);
+  // Click the backdrop (not the dialog) to dismiss.
+  $("#code-modal").addEventListener("click", (e) => { if (e.target.id === "code-modal") closeCode(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("#code-modal").hidden) closeCode();
+  });
+  $("#code-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("#code-body").textContent);
+      $("#code-copy").textContent = t("t.copied");
+      setTimeout(() => { $("#code-copy").textContent = t("t.copy"); }, 1200);
+    } catch (_) {}
+  });
 }
 
 async function loadMySubmissions() {
@@ -255,11 +306,36 @@ async function loadUsers() {
   } catch (_) {}
 }
 
+// The submission log grows without bound, so it is paged rather than dumped.
+const SUBS_PAGE = 25;
+const Subs = { offset: 0, total: 0 };
+
 async function loadAllSubs() {
   try {
-    const data = await api("/api/admin/submissions");
+    const data = await api("/api/admin/submissions?limit=" + SUBS_PAGE + "&offset=" + Subs.offset);
+    // A page can go out of range when rows are deleted under us; step back.
+    if (!data.submissions.length && Subs.offset > 0) {
+      Subs.offset = Math.max(0, (Math.ceil(data.total / SUBS_PAGE) - 1) * SUBS_PAGE);
+      return loadAllSubs();
+    }
+    Subs.total = data.total;
     renderSubs($("#all-subs"), data.submissions, true);
+    renderSubsPager(data.submissions.length);
   } catch (_) {}
+}
+
+function renderSubsPager(shown) {
+  const first = Subs.total ? Subs.offset + 1 : 0;
+  $("#subs-range").textContent = t("t.subs_range", {
+    first, last: Subs.offset + shown, total: Subs.total,
+  });
+  $("#subs-prev").disabled = Subs.offset <= 0;
+  $("#subs-next").disabled = Subs.offset + shown >= Subs.total;
+}
+
+function pageSubs(delta) {
+  Subs.offset = Math.max(0, Subs.offset + delta * SUBS_PAGE);
+  loadAllSubs();
 }
 
 async function loadQueue() {
@@ -318,6 +394,9 @@ function init() {
     adminPost("/api/tournament/recompute?scope=quick", (r) => t("t.recomputed_quick", { n: r.rows.length }));
   $("#recompute-full").onclick = () =>
     adminPost("/api/tournament/recompute?scope=full", (r) => t("t.recomputed_full", { n: r.rows.length }));
+  $("#subs-prev").onclick = () => pageSubs(-1);
+  $("#subs-next").onclick = () => pageSubs(+1);
+  wireCodeModal();
 
   // Re-render the dynamic panels when the language changes.
   T.onChange(() => { renderAuth(); loadStandings(); if (State.me && State.me.authenticated) {

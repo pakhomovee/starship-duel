@@ -89,6 +89,29 @@
 .admin-card h3 { margin: 0 0 10px; font-family: 'Baloo 2', 'Comfortaa'; font-size: 16px; }
 .admin-card .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .chk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); }
+.btn-sm { padding: 3px 10px; font-size: 12px; }
+.sub-view { margin-left: auto; }
+
+/* submission log pager */
+.pager { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.pager .hint { font-size: 12px; }
+.pager button[disabled] { opacity: .4; cursor: default; }
+
+/* admin source viewer */
+.code-modal { position: fixed; inset: 0; z-index: 50; display: flex;
+  align-items: center; justify-content: center; padding: 24px;
+  background: #05030fcc; backdrop-filter: blur(3px); }
+.code-modal[hidden] { display: none; }
+.code-box { display: flex; flex-direction: column; width: min(960px, 100%);
+  max-height: 100%; background: var(--panel); border: 1px solid #ffffff1f;
+  border-radius: 14px; box-shadow: 0 20px 60px #0009; overflow: hidden; }
+.code-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid #ffffff14; }
+.code-head .hint { font-size: 12px; }
+.code-head #code-copy { margin-left: auto; }
+.code-body { margin: 0; padding: 14px 16px; overflow: auto;
+  font: 500 12.5px/1.55 'JetBrains Mono', monospace; color: var(--text);
+  white-space: pre; tab-size: 4; }
 
 @media (max-width: 720px) {
   .admin-grid { grid-template-columns: 1fr; }
