@@ -96,7 +96,7 @@ TOURNEY = TournamentStore()
 ACCOUNTS = AccountStore()
 TOURNEY_BOTS = BotRegistry(account_store=ACCOUNTS)
 SESSION_COOKIE = "sd_session"
-MAX_SUBMISSIONS_PER_DAY = int(os.environ.get("STARSHIP_MAX_SUBMISSIONS_PER_DAY", "20"))
+MAX_SUBMISSIONS_PER_DAY = int(os.environ.get("STARSHIP_MAX_SUBMISSIONS_PER_DAY", "100"))
 
 # --------------------------------------------------------------------------- #
 # automatic evaluation of a fresh submission                                  #
