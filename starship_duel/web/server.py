@@ -481,6 +481,14 @@ def _autoeval(bot_id: str) -> Optional[int]:
     if not AUTOEVAL:
         return None
     try:
+        # The bot passed its smoke test, but the registry is what the workers
+        # launch from -- and materialize_active drops anything that won't build
+        # here. Queueing for a bot it doesn't know just manufactures matches that
+        # die on "no launch spec"; better to schedule nothing and say so.
+        if bot_id not in TOURNEY_BOTS.bot_ids():
+            _pkg_log.error("auto-eval skipped for %s: validated but not in the "
+                           "launch registry (see materialize_active warnings)", bot_id)
+            return 0
         pending = TOURNEY.pending_count()
         if pending >= AUTOEVAL_MAX_PENDING:
             _pkg_log.warning("auto-eval skipped for %s: %d matches already pending "
@@ -560,7 +568,7 @@ def tournament_schedule_baselines(request: Request, n_each: int = 10):
     _require_admin(request)
     TOURNEY_BOTS.reload()
     register_competitors(TOURNEY, TOURNEY_BOTS)
-    added = enqueue_baselines(TOURNEY, n_each=n_each)
+    added = enqueue_baselines(TOURNEY, n_each=n_each, registry=TOURNEY_BOTS)
     return {"added": added, "counts": TOURNEY.status_counts()}
 
 
@@ -569,7 +577,7 @@ def tournament_schedule_full(request: Request, n_each: int = 10):
     _require_admin(request)
     TOURNEY_BOTS.reload()
     register_competitors(TOURNEY, TOURNEY_BOTS)
-    added = enqueue_full_round_robin(TOURNEY, n_each=n_each)
+    added = enqueue_full_round_robin(TOURNEY, n_each=n_each, registry=TOURNEY_BOTS)
     return {"added": added, "counts": TOURNEY.status_counts()}
 
 

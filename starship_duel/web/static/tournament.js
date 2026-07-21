@@ -142,7 +142,15 @@ function renderStandings(body, data) {
       if (isBase) name.append(el("span", "badge", t("t.baseline")));
       tr.append(name);
       tr.append(el("td", "num", fmt(r.score)));
-      tr.append(el("td", "num muted", `[${fmt(r.ci_low)}, ${fmt(r.ci_high)}]`));
+      // A live (between-bootstraps) snapshot carries each interval over from the
+      // last full recompute — shown dimmed with a "±" hint — and has none at all
+      // for a competitor that has only played since. Never fake a [0.00, 0.00].
+      const hasCi = r.ci_low != null && r.ci_high != null;
+      const ciCell = el("td", "num muted" + (r.ci_stale ? " ci-stale" : ""),
+                        hasCi ? `[${fmt(r.ci_low)}, ${fmt(r.ci_high)}]` : "—");
+      if (hasCi && r.ci_stale) ciCell.title = t("t.ci_stale_t");
+      else if (!hasCi) ciCell.title = t("t.ci_none_t");
+      tr.append(ciCell);
       tr.append(el("td", "num", `${r.wins}–${r.losses}`));
       tr.append(el("td", "num muted", String(r.n_games)));
       table.append(tr);

@@ -169,6 +169,76 @@ def test_resubmission_replaces_rather_than_stacking(store):
     assert enqueue_baselines_for_bot(store, "alice", n_each=6, reset=False) == len(BASELINES) * 2
 
 
+def test_scheduling_skips_competitors_the_registry_cannot_launch(store):
+    """Regression: a competitor whose submission stops building leaves the
+    registry but keeps its `competitors` row, so scheduling used to queue matches
+    that could only die with 'no launch spec for bot competitor ...'."""
+    from starship_duel.tournament.schedule import runnable_bots
+
+    for c in ("alive", "broken"):
+        store.add_competitor(c, "bot")
+    reg = BotRegistry()
+    reg.specs = {"alive": {"command": ["x"]}}      # 'broken' failed to build
+
+    assert runnable_bots(store, reg) == ["alive"]
+    assert runnable_bots(store, None) == ["alive", "broken"]   # opt-out unchanged
+
+    added = enqueue_baselines(store, n_each=2, registry=reg)
+    assert added == len(BASELINES) * 2
+    assert {r["a_id"] for r in store.list_matches(limit=500)} == {"alive"}
+
+    # Same for the round robin: one runnable bot means no pairs at all, rather
+    # than a doomed alive-vs-broken schedule.
+    assert enqueue_full_round_robin(store, n_each=2, registry=reg) == 0
+
+
+# ------------------------------------------------------------------- worker --
+def test_worker_reloads_specs_for_a_bot_submitted_after_it_started(store, game_store):
+    """Regression: a long-lived worker used to fail every match for a bot that
+    was submitted after it booted, with 'no launch spec for bot competitor ...',
+    because only the API process reloaded the registry."""
+    from starship_duel.tournament.worker import SpecRefresher, run_worker
+
+    reg = BotRegistry()
+    reg.specs = {}
+    reloads = []
+
+    def fake_reload():
+        reloads.append(1)
+        reg.specs = {"latecomer": {"command": [sys.executable, "-c", "pass"]}}
+
+    reg.reload = fake_reload
+    store.add_matches([("latecomer", "random", 0, 1)])
+
+    run_worker("w0", tstore=store, registry=reg, game_store=game_store,
+               stop_when_empty=True, refresher=SpecRefresher(reg, min_interval=0))
+    assert reloads, "worker never reloaded its allowlist"
+    # The bot is a stub that exits immediately, so the match is a forfeit --
+    # a *played* match, not an orchestration error. That's the point: the
+    # competitor was found and launched.
+    row = store.list_matches()[0]
+    assert row["status"] == "done", row["error"]
+
+
+def test_refresher_rate_limits_reloads_for_a_competitor_that_stays_unknown(store):
+    """A deleted competitor must not make every claimed match rebuild every bot."""
+    from starship_duel.tournament.worker import SpecRefresher
+
+    reg = BotRegistry()
+    reg.specs = {}
+    reloads = []
+    reg.reload = lambda: reloads.append(1)   # never resolves 'ghost'
+
+    refresher = SpecRefresher(reg, min_interval=3600)
+    for _ in range(20):
+        refresher.ensure({"a_id": "ghost", "b_id": "random"})
+    assert len(reloads) == 1                 # one per interval, not one per match
+
+    # Known competitors never trigger a reload at all.
+    refresher.ensure({"a_id": "random", "b_id": "heuristic"})
+    assert len(reloads) == 1
+
+
 # ------------------------------------------------------------------ scoring --
 def _finish(store, a, b, winner_seat, n):
     store.add_matches([(a, b, i % 2, i) for i in range(n)])
@@ -196,6 +266,64 @@ def test_bt_orders_competitors_and_bounds_ci(store):
     # Snapshot is cached and retrievable for the API.
     snap = store.get_standings("quick")
     assert snap and [r["id"] for r in snap["rows"]] == ["A", "B", "C"]
+
+
+def test_live_recompute_carries_intervals_and_flags_them(store):
+    """n_boot=0 must not invent a [0.00, 0.00] interval — it reuses the last
+    bootstrapped one and marks it stale, so the UI can dim it."""
+    _finish(store, "A", "B", 0, 10)
+    full = {r["id"]: r for r in compute_bt(store, "quick", n_boot=200)}
+    assert not any(r["ci_stale"] for r in full.values())
+    assert full["A"]["ci_low"] != 0.0 or full["A"]["ci_high"] != 0.0
+
+    # More games arrive; the live path refits scores but not the intervals.
+    _finish(store, "A", "B", 0, 4)
+    live = {r["id"]: r for r in compute_bt(store, "quick", n_boot=0, carry_ci=True)}
+    assert live["A"]["n_games"] == 14                    # scores/counts are current
+    assert all(r["ci_stale"] for r in live.values() if r["ranked"])
+    assert live["A"]["ci_low"] == full["A"]["ci_low"]    # interval carried over
+    assert live["A"]["ci_high"] == full["A"]["ci_high"]
+
+    # A competitor that has never been bootstrapped gets no interval at all,
+    # rather than a fabricated zero-width one.
+    _finish(store, "C", "A", 0, 6)
+    live2 = {r["id"]: r for r in compute_bt(store, "quick", n_boot=0, carry_ci=True)}
+    assert live2["C"]["ci_low"] is None and live2["C"]["ci_high"] is None
+    # ...and a later full recompute fills it in and clears the flag.
+    full2 = {r["id"]: r for r in compute_bt(store, "quick", n_boot=200)}
+    assert full2["C"]["ci_low"] is not None and not full2["C"]["ci_stale"]
+
+
+def test_worker_publishes_standings_when_the_queue_drains(store, game_store):
+    from starship_duel.tournament.worker import StandingsPublisher, run_worker
+
+    reg = BotRegistry()
+    store.add_matches([("random", "heuristic", 0, 1), ("random", "heuristic", 1, 2)])
+    assert store.get_standings("quick") is None
+
+    run_worker("w0", tstore=store, registry=reg, game_store=game_store,
+               stop_when_empty=True, publisher=StandingsPublisher(store, min_interval=0))
+
+    snap = store.get_standings("quick")
+    assert snap is not None, "queue drained but standings were never published"
+    assert {r["id"] for r in snap["rows"]} >= {"random", "heuristic"}
+
+    # An idle worker that played nothing must not recompute at all.
+    before = snap["computed"]
+    run_worker("w0", tstore=store, registry=reg, game_store=game_store,
+               stop_when_empty=True, publisher=StandingsPublisher(store, min_interval=0))
+    assert store.get_standings("quick")["computed"] == before
+
+
+def test_publisher_coalesces_concurrent_drains(store):
+    """All threads go idle together when the queue empties; one snapshot is enough."""
+    from starship_duel.tournament.worker import StandingsPublisher
+
+    _finish(store, "A", "B", 0, 4)
+    pub = StandingsPublisher(store, min_interval=3600)
+    assert pub.publish() is True
+    assert [pub.publish() for _ in range(5)] == [False] * 5
+    assert pub.publish(force=True) is True
 
 
 def test_bt_empty_is_safe(store):

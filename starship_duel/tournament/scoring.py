@@ -41,7 +41,7 @@ def _fit(n: int, comparisons: List[Comparison], alpha: float) -> np.ndarray:
 
 def compute_bt(store: TournamentStore, scope: str, *, alpha: float = 0.05,
                n_boot: int = 1000, ci: float = 0.90,
-               seed: Optional[int] = 0) -> List[dict]:
+               seed: Optional[int] = 0, carry_ci: bool = False) -> List[dict]:
     """Fit BT over all finished matches and return standings rows.
 
     EVERY active competitor gets a row, even one whose games all drew or errored:
@@ -49,8 +49,17 @@ def compute_bt(store: TournamentStore, scope: str, *, alpha: float = 0.05,
     ``errored``/``pending`` counts and ``last_error`` so an author can see *why*
     it isn't competing, instead of silently vanishing from the ladder.
 
-    Each row: ``{id, score, rank, ranked, ci_low, ci_high, n_games, wins, losses,
-    draws, errored, pending, last_error}``.  Also persisted under ``scope``.
+    Each row: ``{id, score, rank, ranked, ci_low, ci_high, ci_stale, n_games,
+    wins, losses, draws, errored, pending, last_error}``.  Also persisted under
+    ``scope``.
+
+    The fit itself is cheap; the ``n_boot`` bootstrap refits are what cost real
+    time (seconds at 5 competitors, minutes at 50), so the live path after each
+    batch of matches runs with ``n_boot=0`` and ``carry_ci=True``: scores and
+    ranks are current, while each row's interval is carried over from the last
+    snapshot that actually bootstrapped and flagged ``ci_stale``.  A competitor
+    with no previous interval gets ``ci_low``/``ci_high`` of ``None`` rather than
+    a fabricated ``[0.00, 0.00]``.
     """
     results = store.results_for_scoring()
     wins_by = _decisive(results)
@@ -91,6 +100,15 @@ def compute_bt(store: TournamentStore, scope: str, *, alpha: float = 0.05,
     lo_q, hi_q = (1 - ci) / 2 * 100, (1 + ci) / 2 * 100
     ci_low = dict.fromkeys(decisive_ids, 0.0)
     ci_high = dict.fromkeys(decisive_ids, 0.0)
+    ci_stale = False
+    if carry_ci and n_boot <= 0:
+        # Reuse the last bootstrapped interval per competitor; anyone new simply
+        # has none yet.  Marked stale so the UI doesn't present it as current.
+        ci_stale = True
+        prev = store.get_standings(scope) or {}
+        prev_rows = {r["id"]: r for r in prev.get("rows", []) if not r.get("ci_stale")}
+        ci_low = {c: prev_rows.get(c, {}).get("ci_low") for c in decisive_ids}
+        ci_high = {c: prev_rows.get(c, {}).get("ci_high") for c in decisive_ids}
     if comparisons and n_boot > 0:
         rng = random.Random(seed)
         m = len(comparisons)
@@ -113,6 +131,7 @@ def compute_bt(store: TournamentStore, scope: str, *, alpha: float = 0.05,
             "score": float(params[idx[c]]) if ranked else 0.0,
             "ci_low": ci_low[c] if ranked else 0.0,
             "ci_high": ci_high[c] if ranked else 0.0,
+            "ci_stale": ci_stale and ranked,
             "n_games": n_games[c],
             "wins": wins[c],
             "losses": losses[c],

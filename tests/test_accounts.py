@@ -305,6 +305,20 @@ class TestAuthApi(unittest.TestCase):
         self.assertEqual(again["queued"], r["queued"])
         self.assertEqual(self.server.TOURNEY.pending_count(), r["queued"])
 
+    def test_autoeval_refuses_to_queue_a_bot_that_did_not_materialize(self):
+        """A bot can pass its smoke test yet be absent from the launch registry
+        (materialize_active drops anything that won't build here). Queueing for
+        it would just manufacture 'no launch spec' errors."""
+        r = self._upload_as("gwen")
+        self.assertEqual(r.json()["status"], "validated", r.json())
+        self.server.TOURNEY.purge_matches("gwen")
+
+        # Simulate the build failing on reload: the bot leaves the registry.
+        self.server.TOURNEY_BOTS.specs = {}
+        queued = self.server._autoeval("gwen")
+        self.assertEqual(queued, 0)
+        self.assertEqual(self.server.TOURNEY.pending_count(), 0)
+
     def test_autoeval_backs_off_when_queue_is_deep(self):
         self.server.TOURNEY.add_matches([("a", "b", 0, i) for i in range(5)])
         old = self.server.AUTOEVAL_MAX_PENDING

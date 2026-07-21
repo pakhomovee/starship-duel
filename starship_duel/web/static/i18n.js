@@ -190,6 +190,10 @@ const STR = {
     " — в очередь поставлено матчей: {n}; таблица обновится по мере их завершения."],
   "t.queued_busy": [" — the match queue is busy; your games will be scheduled shortly.",
     " — очередь матчей загружена; ваши игры будут запланированы чуть позже."],
+  "t.ci_stale_t": ["Interval from the last full recompute — scores and ranks above are current.",
+    "Интервал из последнего полного пересчёта — очки и места выше актуальны."],
+  "t.ci_none_t": ["No interval yet: this competitor hasn't been through a full recompute.",
+    "Интервала пока нет: этот участник ещё не проходил полный пересчёт."],
 
   "t.login": ["Log in", "Войти"],
   "t.logout": ["Log out", "Выйти"],

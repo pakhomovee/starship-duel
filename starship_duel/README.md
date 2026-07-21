@@ -350,7 +350,8 @@ curl -XPOST localhost:8000/api/tournament/schedule/baselines?n_each=10 \
 # the SQLite claim is atomic, so no match is ever played twice)
 python -m starship_duel.tournament.worker --workers 4
 
-# publish "current standings" — wire to cron every 6h during the contest:
+# refresh the bootstrap CONFIDENCE INTERVALS — cron every 6h during the contest.
+# Scores and ranks don't need this: workers republish them on every queue drain.
 #   0 */6 * * *  cd /srv/starship && python -m starship_duel.tournament.tick
 python -m starship_duel.tournament.tick --scope quick
 
@@ -359,6 +360,16 @@ curl -XPOST localhost:8000/api/tournament/schedule/full?n_each=10 \
      -H "X-Admin-Token: $STARSHIP_ADMIN_TOKEN"
 python -m starship_duel.tournament.tick --scope full
 ```
+
+Standings are published by the **workers**, not by a schedule: whenever a worker
+drains the queue it refits BT and saves a snapshot, so an auto-evaluated
+submission places itself within seconds of its matches finishing. That live refit
+runs with `n_boot=0` on purpose — the fit is ~0.2s at 50 competitors, while the
+bootstrap CIs are ~230s, which would cost far more CPU than playing the matches.
+Intervals are therefore carried over from the last full recompute (cron `tick` or
+the admin endpoint) and marked `ci_stale`; a competitor that hasn't been through
+one yet reports `ci_low`/`ci_high` of `null`, which the UI renders as `—` rather
+than a fabricated `[0.00, 0.00]`.
 
 Standings are read-only and public (`GET /api/tournament/standings?scope=quick|full`);
 scheduling and `POST /api/tournament/recompute` require the `X-Admin-Token` header

@@ -1,6 +1,13 @@
-"""Recompute and publish the Bradley-Terry standings.
+"""Recompute and publish the Bradley-Terry standings *with bootstrap intervals*.
 
-Wire this to cron every 6h for live "current standings" during the contest::
+Scores and ranks no longer need this: a worker republishes them every time it
+drains the queue (see :class:`starship_duel.tournament.worker.StandingsPublisher`),
+so a submission places itself within seconds.  What that live path skips is the
+bootstrap -- ``n_boot`` refits cost seconds at 5 competitors and minutes at 50,
+far more than playing the matches did -- so intervals are carried forward and
+flagged ``ci_stale`` until this runs.
+
+Wire it to cron to refresh them during the contest::
 
     0 */6 * * *  cd /srv/starship && python -m starship_duel.tournament.tick
 

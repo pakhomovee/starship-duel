@@ -48,9 +48,27 @@ def _balanced_rows(a_id: str, b_id: str, n_each: int, already: int,
     return rows
 
 
-def enqueue_baselines(store: TournamentStore, *, n_each: int = 10) -> int:
-    """Schedule participant-vs-baseline matches. Returns rows added."""
+def runnable_bots(store: TournamentStore, registry: Optional[BotRegistry]) -> List[str]:
+    """Active bot competitors the registry can actually launch.
+
+    The two sides drift apart: ``competitors`` rows are permanent, while a bot
+    leaves the registry the moment its submission stops building (see
+    :func:`~starship_duel.tournament.accounts.materialize_active`) or is
+    deactivated.  Scheduling from ``competitors`` alone therefore queues matches
+    that can only ever fail with "no launch spec for bot competitor ...".  Pass a
+    registry to schedule only what can run.
+    """
     bots = [c["id"] for c in store.list_competitors(kind="bot", active_only=True)]
+    if registry is None:
+        return bots
+    live = set(registry.bot_ids())
+    return [b for b in bots if b in live]
+
+
+def enqueue_baselines(store: TournamentStore, *, n_each: int = 10,
+                      registry: Optional[BotRegistry] = None) -> int:
+    """Schedule participant-vs-baseline matches. Returns rows added."""
+    bots = runnable_bots(store, registry)
     rows: List[Tuple[str, str, int, int]] = []
     for bot in bots:
         for base in BASELINES:
@@ -80,9 +98,10 @@ def enqueue_baselines_for_bot(store: TournamentStore, bot_id: str, *, n_each: in
     return store.add_matches(rows)
 
 
-def enqueue_full_round_robin(store: TournamentStore, *, n_each: int = 10) -> int:
+def enqueue_full_round_robin(store: TournamentStore, *, n_each: int = 10,
+                             registry: Optional[BotRegistry] = None) -> int:
     """Schedule the all-pairs round robin over active participant bots."""
-    bots = sorted(c["id"] for c in store.list_competitors(kind="bot", active_only=True))
+    bots = sorted(runnable_bots(store, registry))
     rows: List[Tuple[str, str, int, int]] = []
     for a_id, b_id in itertools.combinations(bots, 2):
         already = store.count_pair(a_id, b_id)

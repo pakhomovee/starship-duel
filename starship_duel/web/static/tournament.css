@@ -52,6 +52,8 @@
 .board-table .rank { color: var(--gold); font-weight: 800; font-family: 'Baloo 2', 'Comfortaa'; }
 .board-table .num { font-family: 'JetBrains Mono', monospace; text-align: right; }
 .board-table .muted { color: var(--muted); }
+/* Interval carried over from the last full recompute, not freshly bootstrapped. */
+.board-table .ci-stale { opacity: .55; font-style: italic; }
 
 /* badges */
 .badge {

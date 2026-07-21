@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import secrets
@@ -34,6 +35,8 @@ from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from ..arena.sandbox import SandboxSpec
+
+_log = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -471,14 +474,25 @@ def materialize_active(store: AccountStore, out_dir: Optional[str] = None,
         sandbox = _S.from_env()
     out = Path(out_dir or default_submissions_dir()).resolve()
     specs = {}
+    skipped: dict = {}
     for sub in subs:
         bot_dir = out / sub["username"]
         try:
             command = build_command(sub["code"], sub["filename"], bot_dir,
                                     sub["username"], sandbox=sandbox)
-        except BuildError:
-            continue  # a validated bot that no longer builds here is simply skipped
+        except BuildError as e:
+            # A validated bot that no longer builds *here* is skipped -- but say
+            # so loudly. Skipping silently is how a competitor ends up scheduled
+            # (the competitors table still has the row) yet unlaunchable, so every
+            # one of its matches dies with "no launch spec" and no stated reason.
+            _log.error("submission %s is validated but will not build; it cannot "
+                       "compete until this is fixed: %s", sub["username"], e)
+            skipped[sub["username"]] = str(e)
+            continue
         specs[sub["username"]] = {"command": command, "timeout": 2.0}
+    if skipped:
+        _log.error("%d validated submission(s) excluded from the registry: %s",
+                   len(skipped), ", ".join(sorted(skipped)))
     return specs
 
 

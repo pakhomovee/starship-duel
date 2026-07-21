@@ -313,6 +313,18 @@ Reboot promptly when a kernel update lands (`/var/run/reboot-required`).
   curl -X POST https://starships.mopmacaque.com/api/tournament/schedule/full \
        -H "X-Admin-Token: $STARSHIP_ADMIN_TOKEN"
   ```
+- **Standings:** the worker republishes scores/ranks every time it drains the
+  queue, so nothing extra is needed for a submission to place. Install the 6-hourly
+  `tournament.tick` cron anyway — it's what refreshes the bootstrap confidence
+  intervals, which the live path skips (they cost minutes of CPU, the fit costs
+  0.2s). Until it first runs, intervals show as `—`.
+- **"no launch spec for bot competitor X":** that competitor is scheduled but not
+  launchable — almost always an active submission that no longer builds on this
+  host. Get the real reason (and stop it burning queue slots) with:
+  ```sh
+  sudo -u starship /opt/starship-duel/.venv/bin/python -m starship_duel.tournament.doctor
+  sudo -u starship ... -m starship_duel.tournament.doctor --purge-unrunnable
+  ```
 - **Watch logs:** `journalctl -u starship-web -f` / `-u starship-worker -f`.
 - **Update the app:** `sudo -u starship git -C /opt/starship-duel pull`, then
   `sudo systemctl restart starship-web starship-worker` (the restart is required —
