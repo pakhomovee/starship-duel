@@ -696,7 +696,26 @@ async def watch(ws: WebSocket, game_id: str):
 # --------------------------------------------------------------------------- #
 # static frontend                                                             #
 # --------------------------------------------------------------------------- #
-app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+class _RevalidatingStatic(StaticFiles):
+    """Static assets that must be revalidated, never served blind from cache.
+
+    Starlette sends ETag/Last-Modified but no ``Cache-Control``, which leaves
+    browsers free to apply *heuristic* freshness -- so an edited stylesheet can
+    keep serving from cache for hours even though the page that needs it has
+    shipped.  ``no-cache`` doesn't stop caching, it just forces a conditional
+    request first: the ETag still turns the usual case into a cheap 304.
+
+    The ``?v=`` markers in the HTML stay as belt-and-braces, but a forgotten bump
+    is no longer able to half-deploy the UI.
+    """
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers.setdefault("Cache-Control", "no-cache")
+        return resp
+
+
+app.mount("/static", _RevalidatingStatic(directory=str(_STATIC)), name="static")
 
 
 @app.get("/")
