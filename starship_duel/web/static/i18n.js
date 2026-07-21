@@ -1,7 +1,7 @@
 "use strict";
 /* Tiny client-side i18n for the whole site (play / rules / tournament).
  *
- * Static markup is tagged with data-i18n[-html|-title|-ph] attributes and
+ * Static markup is tagged with data-i18n[-html|-title|-ph|-aria] attributes and
  * translated in place; dynamic strings go through t(). Server-produced text
  * (engine log lines, action labels, disabled reasons) is left in English by
  * the backend and rewritten here — see tEvent() / tReason() / actLabel().
@@ -416,6 +416,7 @@ function applyStatic(root) {
   scope.querySelectorAll("[data-i18n-html]").forEach((n) => { n.innerHTML = t(n.dataset.i18nHtml); });
   scope.querySelectorAll("[data-i18n-title]").forEach((n) => { n.title = t(n.dataset.i18nTitle); });
   scope.querySelectorAll("[data-i18n-ph]").forEach((n) => { n.placeholder = t(n.dataset.i18nPh); });
+  scope.querySelectorAll("[data-i18n-aria]").forEach((n) => { n.setAttribute("aria-label", t(n.dataset.i18nAria)); });
   const title = document.querySelector("[data-i18n-doctitle]");
   if (title) document.title = t(title.dataset.i18nDoctitle);
   document.documentElement.lang = lang;
