@@ -1,0 +1,35 @@
+# /etc/systemd/system/starship-tick.service
+# Full Bradley-Terry recompute *with bootstrap intervals*. Scores and ranks are
+# already republished by the worker every time it drains the queue; what only
+# this produces is the confidence intervals, which the live path carries forward
+# and flags `ci_stale` until this runs. Triggered by starship-tick.timer.
+#
+# Nice/CPUWeight matter: the bootstrap refits are seconds at 5 competitors and
+# minutes at 50, and this shares a box with the match workers. Losing the race
+# for CPU costs stale intervals; the workers losing it costs unplayed matches.
+[Unit]
+Description=Starship Duel standings recompute (with bootstrap CIs)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=starship
+Group=starship
+WorkingDirectory=/opt/starship-duel
+EnvironmentFile=/etc/starship/starship.env
+ExecStart=/opt/starship-duel/.venv/bin/python -m starship_duel.tournament.tick --scope full
+
+Nice=10
+CPUWeight=20
+
+# --- hardening (same posture as the web/worker units) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+UMask=0077

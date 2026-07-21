@@ -251,6 +251,42 @@ worker running that queue just grows and nobody gets a placing. The worker's
 rows. Budget roughly one worker per spare core, and keep at least one core for
 the web unit, which still runs a smoke game inline on every upload.
 
+### Standings recompute timer
+
+Ranks and scores need no cron — a worker republishes them whenever it drains the
+queue. The **confidence intervals** do: the live path skips the bootstrap (it
+costs far more than playing the matches did) and carries the old intervals
+forward, flagged `ci_stale`, until a full recompute runs. This timer runs one
+every 30 minutes:
+
+```sh
+sudo cp /opt/starship-duel/deploy/starship-tick.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now starship-tick.timer
+systemctl list-timers starship-tick --no-pager   # next / last firing
+sudo systemctl start starship-tick.service       # run one now, don't wait
+journalctl -u starship-tick -n 30 --no-pager     # it prints the table it wrote
+```
+
+Interval vs. cost: the bootstrap is seconds at 5 competitors but minutes at 50,
+so on a large field 30 minutes may not be comfortable. systemd won't overlap
+firings, and the unit is `Nice`d below the workers, so the failure mode is
+intervals refreshing less often than every 30 min — not a pile-up. If that
+happens, lower `--n-boot` in the unit (1000 → 200 keeps intervals usable at a
+fraction of the cost) before lengthening the interval.
+
+**Never run `tick` by hand without the env file** — `STARSHIP_TOURNEY_DB`
+defaults to a *relative* path, so a bare `python -m ...tick` from the checkout
+reads `/opt/starship-duel/starship_tournament.db` (the copy tracked in git),
+not production. The unit avoids this by inheriting `EnvironmentFile=`; for a
+manual run use:
+
+```sh
+sudo -u starship bash -c 'cd /opt/starship-duel && set -a \
+  && . /etc/starship/starship.env && set +a \
+  && .venv/bin/python -m starship_duel.tournament.tick --scope full'
+```
+
 ## 6. Caddy (TLS reverse proxy)
 
 ```sh
@@ -322,8 +358,14 @@ Reboot promptly when a kernel update lands (`/var/run/reboot-required`).
   launchable — almost always an active submission that no longer builds on this
   host. Get the real reason (and stop it burning queue slots) with:
   ```sh
-  sudo -u starship /opt/starship-duel/.venv/bin/python -m starship_duel.tournament.doctor
-  sudo -u starship ... -m starship_duel.tournament.doctor --purge-unrunnable
+  # the cd and the env file are both required: the package is imported from the
+  # working directory (there is no pip install), and the DB paths + sandbox
+  # settings live in starship.env — without them you diagnose the wrong database.
+  sudo -u starship bash -c 'cd /opt/starship-duel && set -a \
+    && . /etc/starship/starship.env && set +a \
+    && .venv/bin/python -m starship_duel.tournament.doctor'
+  # ...then, once you agree with the report, add --purge-unrunnable to drop
+  # those competitors' queued matches (played results are untouched).
   ```
 - **Watch logs:** `journalctl -u starship-web -f` / `-u starship-worker -f`.
 - **Update the app:** `sudo -u starship git -C /opt/starship-duel pull`, then

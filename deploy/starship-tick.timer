@@ -1,0 +1,17 @@
+# /etc/systemd/system/starship-tick.timer
+# Every 30 minutes. systemd will not start a firing while the previous run is
+# still active, so a recompute that outgrows the interval degrades to "as often
+# as it can finish" rather than stacking overlapping fits on the same box.
+[Unit]
+Description=Recompute Starship Duel standings every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=30min
+# Wall-clock drift is irrelevant here and a burst of work on every boot is not:
+# spread the start so a restart doesn't land the fit on top of the workers.
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

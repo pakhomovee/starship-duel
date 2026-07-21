@@ -7,9 +7,11 @@ bootstrap -- ``n_boot`` refits cost seconds at 5 competitors and minutes at 50,
 far more than playing the matches did -- so intervals are carried forward and
 flagged ``ci_stale`` until this runs.
 
-Wire it to cron to refresh them during the contest::
-
-    0 */6 * * *  cd /srv/starship && python -m starship_duel.tournament.tick
+Run it on a timer to refresh them during the contest -- ``deploy/starship-tick
+.timer`` does this every 30 minutes.  Whatever invokes it must supply the same
+environment as the workers: ``$STARSHIP_TOURNEY_DB`` defaults to a *relative*
+path, so a bare run from the checkout scores the sample DB tracked in git
+instead of production.
 
 The admin ``POST /api/tournament/recompute`` endpoint calls the same
 :func:`starship_duel.tournament.scoring.compute_bt`.  ``--scope full`` is the
