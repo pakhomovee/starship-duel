@@ -2,9 +2,14 @@
 
 Engine -> bot (a request to decide one action)::
 
-    {"type":"act","turn":12,"you":{...},"rival":{...},"map":{...},
-     "systems":{...},"legal_actions":[{"action":"JUMP","target":"Halcyon Binary"},
-                                      {"action":"HOLD"}, ...]}
+    {"type":"act","turn":12,"your_id":1,"map_id":"reference","domination_target":80,
+     "you":{...},"rival":{...},"map":{...},"systems":{...},
+     "campaign_score":[0,1],"skirmish":1,
+     "legal_actions":[{"action":"JUMP","target":"Halcyon Binary"},
+                      {"action":"HOLD"}, ...]}
+
+Both win races are public, so ``you``/``rival`` each carry ``lives`` and
+``domination`` (the map-control score, raced to ``domination_target``).
 
 Bot -> engine (the chosen action; just echo one legal entry)::
 
@@ -37,6 +42,9 @@ def encode_request(obs: Observation) -> dict:
         cache = obs.system_cache.get(name)
         systems[name] = {
             "owner": obs.system_owner.get(name),
+            # False when this ship has never sensed the system: ``owner`` is then
+            # unknown rather than proven unowned (a deep-cloaked rival may hold it).
+            "owner_known": obs.owner_known is None or name in obs.owner_known,
             "status": obs.system_status.get(name, "STABLE"),
             "binary": name in obs.binary_systems,
             "cache": cache,  # {"kind","value"} or None
@@ -47,13 +55,20 @@ def encode_request(obs: Observation) -> dict:
         "type": "act",
         "turn": obs.turn_number,
         "your_id": obs.ship_id,
+        "map_id": obs.map_id,
+        # Both win races are PUBLIC to both ships (see the UI's rival card).
+        "domination_target": obs.domination_target,
         "you": {
             "position": obs.position,
             "cloaked": obs.cloaked,
+            # Turns of Deep Cloak protection left; 0 when not deep-cloaked.
+            "deep_cloak_turns_left": obs.deep_cloak_turns_left,
             "energy": obs.energy,
             "banked_overcharge": obs.banked_overcharge,
             "actions_remaining": obs.actions_remaining,
             "unlocked": obs.unlocked,
+            "lives": obs.lives,
+            "domination": obs.domination[obs.ship_id],
         },
         "rival": {
             # exact system only when known for certain, else nulls + the BFS seed
@@ -62,6 +77,8 @@ def encode_request(obs: Observation) -> dict:
             "moves_since_seen": obs.rival_moves_since_seen,
             "unlocked": obs.rival_unlocked,
             "last_action": obs.rival_last_action,
+            "lives": obs.rival_lives,
+            "domination": obs.domination[1 - obs.ship_id],
         },
         "map": {
             "adjacency": obs.adjacency,

@@ -16,12 +16,20 @@ stdin, calls your function, and writes one JSON action per line to stdout.
 
     run(decide)
 
-`request` fields: turn, your_id, you{position,cloaked,energy,banked_overcharge,
-actions_remaining,unlocked}, rival{known_position,last_seen,moves_since_seen,
-unlocked,last_action}, map{adjacency,binary_systems}, systems{name:{owner,status,
-binary,cache}}, legal_actions[{action,target?}]. Reply with one legal action
-object, e.g. {"action":"JUMP","target":"Veyra"} or {"action":"HOLD"} — or
-{"index": k} to pick legal_actions[k].
+`request` fields: turn, your_id, map_id, domination_target,
+you{position,cloaked,deep_cloak_turns_left,energy,banked_overcharge,
+actions_remaining,unlocked,lives,domination},
+rival{known_position,last_seen,moves_since_seen,unlocked,last_action,lives,
+domination}, map{adjacency,binary_systems}, systems{name:{owner,owner_known,
+status,binary,cache,collapse_in}}, campaign_score, skirmish,
+legal_actions[{action,target?}]. Reply with one legal action object, e.g.
+{"action":"JUMP","target":"Veyra"} or {"action":"HOLD"} — or {"index": k} to
+pick legal_actions[k]. `target` is honoured for JUMP only.
+
+Both win races are public: `you`/`rival` each carry `lives` (3 to start) and
+`domination` (map-control points, first to `domination_target` wins).
+`systems[x].owner_known` is false where you have never sensed the system — its
+`owner` is then unknown, not proven unowned.
 
 Keep any per-game memory (belief tracking, opponent model) in your own module
 globals; the process persists for the whole game.

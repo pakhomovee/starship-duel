@@ -20,6 +20,21 @@
 // The harness reads one JSON request per line from stdin and writes one JSON
 // action per line to stdout. The process persists for the whole game, so keep
 // any per-game memory (belief, opponent model) in your own globals.
+//
+// request: turn, your_id, map_id, domination_target,
+//   you{position,cloaked,deep_cloak_turns_left,energy,banked_overcharge,
+//       actions_remaining,unlocked,lives,domination},
+//   rival{known_position,last_seen,moves_since_seen,unlocked,last_action,
+//         lives,domination},
+//   map{adjacency,binary_systems},
+//   systems{name:{owner,owner_known,status,binary,cache,collapse_in}},
+//   campaign_score, skirmish, legal_actions[{action,target?}]
+// reply: one legal action, e.g. {{"action","JUMP"},{"target","Veyra"}}, or
+//   {{"index", k}} to pick legal_actions[k]. `target` is honoured for JUMP only.
+//
+// Both win races are public: you/rival each carry `lives` and `domination`
+// (map-control points, first to `domination_target` wins). owner_known is false
+// where you have never sensed the system -- `owner` is unknown, not unowned.
 
 #ifndef STARSHIP_BOT_HPP
 #define STARSHIP_BOT_HPP

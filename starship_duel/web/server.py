@@ -628,6 +628,11 @@ def rules_page():
     return FileResponse(str(_STATIC / "rules.html"))
 
 
+@app.get("/protocol")
+def protocol_page():
+    return FileResponse(str(_STATIC / "protocol.html"))
+
+
 def main():
     """Run the server. Defaults to localhost; pass --host 0.0.0.0 (or set
     STARSHIP_HOST) to expose it on a VM — see the README security note first."""

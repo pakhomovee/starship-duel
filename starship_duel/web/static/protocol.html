@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n-doctitle="p.title">Starship Duel — Bot Protocol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Comfortaa:wght@600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css?v=13">
+<link rel="stylesheet" href="/static/rules.css?v=4">
+<link rel="stylesheet" href="/static/protocol.css?v=1">
+<script src="/static/i18n.js?v=2"></script>
+</head>
+<body>
+<div id="sprite-host" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-kicker" data-i18n="p.kicker">Bot Protocol</span>
+    <h1>Starship&nbsp;Duel</h1>
+  </div>
+  <div class="setup">
+    <a href="/" class="btn btn-ghost" data-i18n="nav.play_back" data-i18n-title="nav.play_t">◀ Play</a>
+    <a href="/rules" class="btn btn-ghost" data-i18n="nav.rules" data-i18n-title="nav.rules_t">Rules ?</a>
+    <a href="/tournament" class="btn btn-primary" data-i18n="nav.tournament" data-i18n-title="nav.tournament_t">Tournament ♛</a>
+    <div data-lang-switch></div>
+  </div>
+</header>
+
+<main class="guide doc">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="kicker" data-i18n="p.hero_kicker">One JSON object per line</div>
+    <h1 data-i18n="p.hero_h1">Write a bot in any language</h1>
+    <p class="lede" data-i18n-html="p.hero_lede">Your bot is a plain program. The engine writes one JSON
+      request to its <b>stdin</b> per action and reads one JSON reply from its <b>stdout</b>. That's the
+      whole interface — no framework, no network, no dependencies.</p>
+    <div class="tagset">
+      <span class="tag" data-i18n="p.tag_lines">📨 Line-delimited JSON</span>
+      <span class="tag" data-i18n="p.tag_tl">⏱ 2 s per action</span>
+      <span class="tag" data-i18n="p.tag_langs">🐍 Python or C++</span>
+      <span class="tag" data-i18n="p.tag_legal">✅ Legal moves precomputed</span>
+    </div>
+  </section>
+
+  <!-- 01 · LIFECYCLE -->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num" data-i18n="p.s1_num">01 · The loop</div>
+      <h2 data-i18n="p.s1_h">How a match drives your process</h2>
+      <p data-i18n="p.s1_p">Your program is started once and stays alive for the whole game, so it can keep
+        its own memory between decisions.</p>
+    </div>
+    <div class="split">
+      <div class="panel-card">
+        <h3 data-i18n="p.life_h">Lifecycle</h3>
+        <ul>
+          <li data-i18n-html="p.life_1"><b>Spawned once per game.</b> Globals, belief state and opponent
+            models persist across every request.</li>
+          <li data-i18n-html="p.life_2"><b>One request per action</b> — not per turn. A turn is at least
+            2 actions, so you are asked at least twice per turn.</li>
+          <li data-i18n-html="p.life_3"><b>Read a line, write a line.</b> Always
+            <code>flush</code> after writing, or the engine will see nothing and time out.</li>
+          <li data-i18n-html="p.life_4"><b>stderr is free.</b> It is not parsed, so use it for logging.</li>
+        </ul>
+      </div>
+      <div class="panel-card">
+        <h3 data-i18n="p.turn_h">A turn, concretely</h3>
+        <p data-i18n-html="p.turn_p">You start a turn with <b>2 actions</b> (plus any banked with
+          Overcharge). Each one is a separate request/reply round-trip. The turn ends when you spend them
+          all or reply <code>END_TURN</code>:</p>
+        <div class="code"><pre>→ <span class="c">request</span>  actions_remaining: <span class="n">2</span>
+← <span class="c">reply</span>    {<span class="k">"action"</span>:<span class="s">"CLAIM"</span>}
+
+→ <span class="c">request</span>  actions_remaining: <span class="n">1</span>
+← <span class="c">reply</span>    {<span class="k">"action"</span>:<span class="s">"JUMP"</span>,<span class="k">"target"</span>:<span class="s">"Veyra"</span>}
+
+<span class="c">… rival's turn — you are not asked …</span></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 · TIME LIMITS -->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num" data-i18n="p.s2_num">02 · Limits</div>
+      <h2 data-i18n="p.s2_h">Time limit and failure handling</h2>
+      <p data-i18n="p.s2_p">Being slow costs you a move. Crashing costs you the game.</p>
+    </div>
+    <div class="panel-card">
+      <h3 data-i18n="p.tl_h">2 seconds per action</h3>
+      <p data-i18n-html="p.tl_p">The limit is <b>2 s of wall-clock per action</b>, measured from the moment
+        the request is written to the moment your reply line arrives. It is <b>not</b> a per-turn or
+        per-game budget — every action gets its own fresh 2 s.</p>
+      <div class="note-box" data-i18n-html="p.tl_note"><b>Watch your startup.</b> The first request is
+        written immediately after your process launches, so heavy imports or model loading eat into the
+        <b>first action's</b> 2 s. Load lazily, or keep startup well under a second.</div>
+      <h3 style="margin-top:18px" data-i18n="p.fail_h">What happens when things go wrong</h3>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr>
+            <th data-i18n="p.fail_col1">Event</th>
+            <th data-i18n="p.fail_col2">Consequence</th>
+          </tr>
+          <tr>
+            <td data-i18n="p.fail_slow">Reply takes longer than 2 s</td>
+            <td data-i18n-html="p.fail_slow_r"><b>Strike.</b> The engine plays <code>END_TURN</code> for you
+              (or the first legal action) and the match continues.</td>
+          </tr>
+          <tr>
+            <td data-i18n="p.fail_json">Reply is not valid JSON</td>
+            <td data-i18n-html="p.fail_json_r"><b>Strike</b> — same substitution.</td>
+          </tr>
+          <tr>
+            <td data-i18n="p.fail_illegal">Reply is an unknown or currently illegal action</td>
+            <td data-i18n-html="p.fail_illegal_r"><b>Strike</b> — same substitution.</td>
+          </tr>
+          <tr>
+            <td data-i18n="p.fail_crash">Process exits, crashes, or closes stdout</td>
+            <td data-i18n-html="p.fail_crash_r"><b>Immediate loss.</b> An uncaught exception is a forfeit —
+              catch your own errors and return a legal action instead.</td>
+          </tr>
+        </table>
+      </div>
+      <div class="note-box good" data-i18n-html="p.strike_note">Strikes are logged but <b>never</b> end a
+        live match, however many you collect — you simply keep losing moves. They only matter at upload,
+        where a bot that misbehaves on more than half its moves is rejected.</div>
+    </div>
+  </section>
+
+  <!-- 03 · REQUEST -->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num" data-i18n="p.s3_num">03 · Input</div>
+      <h2 data-i18n="p.s3_h">The request (engine → bot)</h2>
+      <p data-i18n="p.s3_p">One object per line, on stdin. Everything you are entitled to know is here —
+        never more.</p>
+    </div>
+
+    <div class="code"><pre>{
+  <span class="k">"type"</span>: <span class="s">"act"</span>,               <span class="c">// always "act"</span>
+  <span class="k">"turn"</span>: <span class="n">12</span>,                  <span class="c">// turn number (the cap is 200)</span>
+  <span class="k">"your_id"</span>: <span class="n">1</span>,                 <span class="c">// 0 or 1 — which ship you are</span>
+  <span class="k">"map_id"</span>: <span class="s">"reference"</span>,
+  <span class="k">"domination_target"</span>: <span class="n">80</span>,      <span class="c">// control points needed to win</span>
+  <span class="k">"skirmish"</span>: <span class="n">1</span>,
+  <span class="k">"campaign_score"</span>: [<span class="n">0</span>, <span class="n">1</span>],       <span class="c">// skirmishes won, indexed by ship id</span>
+
+  <span class="k">"you"</span>: {
+    <span class="k">"position"</span>: <span class="s">"Aurelia Binary"</span>,
+    <span class="k">"cloaked"</span>: <span class="n">false</span>,
+    <span class="k">"deep_cloak_turns_left"</span>: <span class="n">0</span>,
+    <span class="k">"energy"</span>: <span class="n">1</span>,
+    <span class="k">"banked_overcharge"</span>: <span class="n">0</span>,
+    <span class="k">"actions_remaining"</span>: <span class="n">1</span>,
+    <span class="k">"lives"</span>: <span class="n">3</span>,
+    <span class="k">"domination"</span>: <span class="n">24</span>,
+    <span class="k">"unlocked"</span>: {<span class="k">"proximity_alert"</span>: <span class="n">false</span>,
+                 <span class="k">"long_range_scanners"</span>: <span class="n">true</span>,
+                 <span class="k">"jamming"</span>: <span class="n">false</span>}
+  },
+
+  <span class="k">"rival"</span>: {
+    <span class="k">"known_position"</span>: <span class="s">"Kestrel Binary"</span>,  <span class="c">// null unless known for certain</span>
+    <span class="k">"last_seen"</span>: <span class="s">"Kestrel Binary"</span>,       <span class="c">// last confirmed system, or null</span>
+    <span class="k">"moves_since_seen"</span>: <span class="n">0</span>,              <span class="c">// hops it could have made since</span>
+    <span class="k">"last_action"</span>: <span class="s">"JUMP"</span>,              <span class="c">// what it publicly did, or null</span>
+    <span class="k">"lives"</span>: <span class="n">3</span>,
+    <span class="k">"domination"</span>: <span class="n">31</span>,
+    <span class="k">"unlocked"</span>: {<span class="k">"proximity_alert"</span>: <span class="n">false</span>, …}
+  },
+
+  <span class="k">"map"</span>: {
+    <span class="k">"adjacency"</span>: {<span class="k">"Solantis"</span>: [<span class="s">"Veyra"</span>, <span class="s">"Kestrel Binary"</span>], …},
+    <span class="k">"binary_systems"</span>: [<span class="s">"Aurelia Binary"</span>, <span class="s">"Halcyon Binary"</span>]
+  },
+
+  <span class="k">"systems"</span>: {
+    <span class="k">"Solantis"</span>: {
+      <span class="k">"owner"</span>: <span class="n">null</span>,           <span class="c">// 0, 1, or null</span>
+      <span class="k">"owner_known"</span>: <span class="n">true</span>,     <span class="c">// false ⇒ "owner" is fogged, not unowned</span>
+      <span class="k">"status"</span>: <span class="s">"STABLE"</span>,       <span class="c">// STABLE | DESTABILIZING | SUPERNOVA</span>
+      <span class="k">"binary"</span>: <span class="n">false</span>,
+      <span class="k">"collapse_in"</span>: <span class="n">30</span>,       <span class="c">// plies to supernova; null = not scheduled</span>
+      <span class="k">"cache"</span>: {<span class="k">"kind"</span>: <span class="s">"ENERGY"</span>, <span class="k">"value"</span>: <span class="n">10</span>}   <span class="c">// or null</span>
+    }, …
+  },
+
+  <span class="k">"legal_actions"</span>: [
+    {<span class="k">"action"</span>: <span class="s">"JUMP"</span>, <span class="k">"target"</span>: <span class="s">"Kestrel Binary"</span>},
+    {<span class="k">"action"</span>: <span class="s">"HOLD"</span>}, {<span class="k">"action"</span>: <span class="s">"CLAIM"</span>},
+    {<span class="k">"action"</span>: <span class="s">"SCAN"</span>}, {<span class="k">"action"</span>: <span class="s">"END_TURN"</span>}
+  ]
+}</pre></div>
+
+    <div class="split">
+      <div class="panel-card">
+        <h3 data-i18n="p.you_h">Your ship — private</h3>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <tr><th data-i18n="p.col_field">Field</th><th data-i18n="p.col_meaning">Meaning</th></tr>
+            <tr><td class="t">position</td><td data-i18n="p.f_position">The system you are in.</td></tr>
+            <tr><td class="t">cloaked</td><td data-i18n="p.f_cloaked">Whether your position is currently hidden from the rival.</td></tr>
+            <tr><td class="t">deep_cloak_turns_left</td><td data-i18n="p.f_dcl">Turns of Deep Cloak protection remaining; 0 when not deep-cloaked.</td></tr>
+            <tr><td class="t">energy</td><td data-i18n="p.f_energy">Spendable energy.</td></tr>
+            <tr><td class="t">banked_overcharge</td><td data-i18n="p.f_banked">Extra actions saved for later turns.</td></tr>
+            <tr><td class="t">actions_remaining</td><td data-i18n="p.f_actions">Actions left in this turn, including this one.</td></tr>
+            <tr><td class="t">lives</td><td data-i18n="p.f_lives">Lives left. At 0 you are eliminated.</td></tr>
+            <tr><td class="t">domination</td><td data-i18n="p.f_dom">Your control points, raced to <code>domination_target</code>.</td></tr>
+            <tr><td class="t">unlocked</td><td data-i18n="p.f_unlocked">Which permanent upgrades you own.</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="panel-card">
+        <h3 data-i18n="p.rival_h">The rival — public only</h3>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <tr><th data-i18n="p.col_field">Field</th><th data-i18n="p.col_meaning">Meaning</th></tr>
+            <tr><td class="t">known_position</td><td data-i18n="p.f_known">Their exact system, but only while it is known for certain. Otherwise <code>null</code>.</td></tr>
+            <tr><td class="t">last_seen</td><td data-i18n="p.f_lastseen">The last system they were confirmed in, or <code>null</code> if never.</td></tr>
+            <tr><td class="t">moves_since_seen</td><td data-i18n="p.f_msince">Upper bound on single hops they could have made since. 0 while currently known.</td></tr>
+            <tr><td class="t">last_action</td><td data-i18n="p.f_lastact">The action they last took publicly — masked to a generic value if they run Jamming.</td></tr>
+            <tr><td class="t">lives</td><td data-i18n="p.f_rlives">Their remaining lives.</td></tr>
+            <tr><td class="t">domination</td><td data-i18n="p.f_rdom">Their control points. Both scores are public.</td></tr>
+            <tr><td class="t">unlocked</td><td data-i18n="p.f_runlocked">Which upgrades they have bought.</td></tr>
+          </table>
+        </div>
+        <p class="hint" data-i18n-html="p.rival_note">Their <b>energy</b>, <b>banked actions</b> and hidden
+          position are never sent.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · REPLY -->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num" data-i18n="p.s4_num">04 · Output</div>
+      <h2 data-i18n="p.s4_h">The reply (bot → engine)</h2>
+      <p data-i18n="p.s4_p">Exactly one JSON object on stdout, followed by a newline and a flush.</p>
+    </div>
+
+    <div class="split">
+      <div class="panel-card">
+        <h3 data-i18n="p.reply_named">By name</h3>
+        <div class="code"><pre>{<span class="k">"action"</span>: <span class="s">"JUMP"</span>, <span class="k">"target"</span>: <span class="s">"Veyra"</span>}
+{<span class="k">"action"</span>: <span class="s">"CLAIM"</span>}</pre></div>
+        <p data-i18n-html="p.reply_named_p">Action names are case-insensitive and whitespace is trimmed.</p>
+      </div>
+      <div class="panel-card">
+        <h3 data-i18n="p.reply_index">By index</h3>
+        <div class="code"><pre>{<span class="k">"index"</span>: <span class="n">0</span>}   <span class="c">// = legal_actions[0]</span></pre></div>
+        <p data-i18n-html="p.reply_index_p">Picks straight out of the <code>legal_actions</code> array you
+          were sent. The simplest possible valid bot.</p>
+      </div>
+    </div>
+
+    <div class="note-box bad" data-i18n-html="p.target_note"><b><code>target</code> is honoured for
+      <code>JUMP</code> only.</b> It is discarded for every other action. In particular a long-range snipe
+      is a plain <code>{"action":"FIRE"}</code> — the engine picks the target itself.</div>
+
+    <h3 style="margin-top:22px" data-i18n="p.all_actions_h">Every action you can send</h3>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <tr>
+          <th data-i18n="p.col_send">Send</th>
+          <th data-i18n="p.col_cost">Cost</th>
+          <th data-i18n="p.col_does">What it does</th>
+        </tr>
+        <tr><td class="t">{"action":"JUMP","target":"X"}</td><td><span class="cost-pill free" data-i18n="p.free">free</span></td><td data-i18n="desc.JUMP">Move to an adjacent system.</td></tr>
+        <tr><td class="t">{"action":"HOLD"}</td><td><span class="cost-pill free" data-i18n="p.free">free</span></td><td data-i18n="desc.HOLD">Stay put and slip back under cloak.</td></tr>
+        <tr><td class="t">{"action":"CLAIM"}</td><td><span class="cost-pill free" data-i18n="p.free">free</span></td><td data-i18n="desc.CLAIM">Take the system you are standing on.</td></tr>
+        <tr><td class="t">{"action":"FIRE"}</td><td><span class="cost-pill energy">3 ⚡</span></td><td data-i18n="desc.FIRE">Raid your current system.</td></tr>
+        <tr><td class="t">{"action":"SCAN"}</td><td><span class="cost-pill free" data-i18n="p.free">free</span></td><td data-i18n="desc.SCAN">Pin the rival's exact system.</td></tr>
+        <tr><td class="t">{"action":"DEEP_CLOAK"}</td><td><span class="cost-pill energy">14 ⚡</span></td><td data-i18n="desc.DEEP_CLOAK">Become undetectable for 2 turns.</td></tr>
+        <tr><td class="t">{"action":"OVERCHARGE"}</td><td><span class="cost-pill energy">6 ⚡</span></td><td data-i18n="desc.OVERCHARGE">Bank +1 action for next turn.</td></tr>
+        <tr><td class="t">{"action":"UNLOCK_PROXIMITY_ALERT"}</td><td><span class="cost-pill energy">6 ⚡</span></td><td data-i18n="desc.UNLOCK_PROXIMITY_ALERT">Permanent defensive unlock.</td></tr>
+        <tr><td class="t">{"action":"UNLOCK_LONG_RANGE_SCANNERS"}</td><td><span class="cost-pill energy">10 ⚡</span></td><td data-i18n="desc.UNLOCK_LONG_RANGE_SCANNERS">Permanent offensive unlock.</td></tr>
+        <tr><td class="t">{"action":"UNLOCK_JAMMING"}</td><td><span class="cost-pill energy">8 ⚡</span></td><td data-i18n="desc.UNLOCK_JAMMING">Permanent masking unlock.</td></tr>
+        <tr><td class="t">{"action":"END_TURN"}</td><td><span class="cost-pill free" data-i18n="p.free">free</span></td><td data-i18n="desc.END_TURN">Stop early and bank spare actions.</td></tr>
+      </table>
+    </div>
+    <p class="hint" data-i18n-html="p.legal_note">Everything currently affordable and legal is already
+      listed in <code>legal_actions</code>, so you never have to re-derive the rules — but the engine
+      validates your reply independently either way.</p>
+  </section>
+
+  <!-- 05 · FOG -->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num" data-i18n="p.s5_num">05 · Hidden information</div>
+      <h2 data-i18n="p.s5_h">What the request deliberately withholds</h2>
+      <p data-i18n="p.s5_p">This is a fog-of-war game, and the protocol is the fog. Two things you must
+        infer yourself.</p>
+    </div>
+    <div class="split">
+      <div class="panel-card">
+        <h3 data-i18n="p.where_h">Where is the rival?</h3>
+        <p data-i18n-html="p.where_p">You get <code>known_position</code> only when it is certain. The
+          "could be here" candidate set is <b>not</b> provided — rebuild it yourself from the two seeds you
+          are given:</p>
+        <div class="code"><pre><span class="c">candidates ≈ systems within</span>
+<span class="c">  rival.moves_since_seen hops</span>
+<span class="c">  of rival.last_seen</span></pre></div>
+        <p data-i18n-html="p.where_p2">A breadth-first search over <code>map.adjacency</code> is enough.
+          Narrow it further using what you can see: a system you are standing next to and know is empty
+          can be struck off.</p>
+      </div>
+      <div class="panel-card">
+        <h3 data-i18n="p.own_h">Who owns what?</h3>
+        <p data-i18n-html="p.own_p">The ownership map is fogged too. This is the trap worth spelling out:</p>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <tr><th data-i18n="p.col_reads">The request says</th><th data-i18n="p.col_means">It means</th></tr>
+            <tr><td class="t">owner: 0 / 1</td><td data-i18n="p.own_owned">That ship holds it. Confirmed.</td></tr>
+            <tr><td class="t">owner: null<br>owner_known: true</td><td data-i18n="p.own_free">Genuinely unowned. Confirmed.</td></tr>
+            <tr><td class="t">owner: null<br>owner_known: false</td><td data-i18n="p.own_fog">You have never sensed this system. It may quietly belong to the rival.</td></tr>
+          </table>
+        </div>
+        <p class="hint" data-i18n-html="p.own_note">A rival claiming under Deep Cloak grows their empire
+          invisibly, so treating fogged systems as free real estate is how you lose the domination race
+          without ever seeing it happen.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 · GET STARTED -->
+  <section class="sec">
+    <div class="sec-head">
+      <div class="num" data-i18n="p.s6_num">06 · Get started</div>
+      <h2 data-i18n="p.s6_h">A working bot in ten lines</h2>
+      <p data-i18n="p.s6_p">Both SDKs do nothing but the read/parse/write loop, so you can also skip them
+        and speak the protocol directly.</p>
+    </div>
+    <div class="split">
+      <div class="panel-card">
+        <h3 data-i18n-html="p.py_h">Python — <code>starship_sdk.py</code></h3>
+        <div class="code"><pre><span class="k">from</span> starship_sdk <span class="k">import</span> run
+
+<span class="k">def</span> <span class="s">decide</span>(req):
+    me = req[<span class="s">"you"</span>]
+    <span class="c"># fire if we know the rival is right here</span>
+    <span class="k">if</span> req[<span class="s">"rival"</span>][<span class="s">"known_position"</span>] == me[<span class="s">"position"</span>]:
+        <span class="k">return</span> {<span class="s">"action"</span>: <span class="s">"FIRE"</span>}
+    <span class="k">return</span> req[<span class="s">"legal_actions"</span>][<span class="n">0</span>]
+
+run(decide)</pre></div>
+        <p class="hint" data-i18n-html="p.py_note">Upload a single <code>.py</code> file. Copy
+          <code>starship_sdk.py</code> beside it, or inline the six-line loop.</p>
+      </div>
+      <div class="panel-card">
+        <h3 data-i18n-html="p.cpp_h">C++ — <code>starship_bot.hpp</code></h3>
+        <div class="code"><pre><span class="c">#include</span> <span class="s">"starship_bot.hpp"</span>
+<span class="k">using</span> nlohmann::json;
+
+json decide(<span class="k">const</span> json&amp; req) {
+    <span class="k">if</span> (req[<span class="s">"rival"</span>][<span class="s">"known_position"</span>] == req[<span class="s">"you"</span>][<span class="s">"position"</span>])
+        <span class="k">return</span> json{{<span class="s">"action"</span>, <span class="s">"FIRE"</span>}};
+    <span class="k">return</span> req[<span class="s">"legal_actions"</span>][<span class="n">0</span>];
+}
+<span class="k">int</span> main() { <span class="k">return</span> starship::run(decide); }</pre></div>
+        <p class="hint" data-i18n-html="p.cpp_note">Upload a single <code>.cpp</code> file — it is compiled
+          on the server with <code>-std=c++17 -O2</code>. <code>nlohmann/json</code> is provided.</p>
+      </div>
+    </div>
+
+    <div class="panel-card" style="margin-top:16px">
+      <h3 data-i18n="p.sub_h">Submitting</h3>
+      <p data-i18n-html="p.sub_p">Upload one file on the <b>Tournament</b> page. It is statically scanned,
+        then smoke-tested against <code>random</code> inside the same sandbox it will compete in. If it
+        builds, survives the game, and misbehaves on no more than half its moves, it becomes your active
+        entry and starts playing the ladder.</p>
+      <p class="hint" data-i18n-html="p.sub_note">Test locally first — point the engine at your program
+        directly:</p>
+      <div class="code"><pre>python -m starship_duel.run --bot0 heuristic --bot1 <span class="s">"cmd:./my_bot"</span></pre></div>
+    </div>
+
+    <div class="backlink">
+      <a href="/tournament" class="btn btn-primary" data-i18n="p.cta_submit">Submit a bot ♛</a>
+      <a href="/rules" class="btn btn-ghost" data-i18n="p.cta_rules">Learn the game ?</a>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

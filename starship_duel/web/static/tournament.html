@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Comfortaa:wght@600;700&family=Nunito:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/styles.css?v=13">
 <link rel="stylesheet" href="/static/tournament.css?v=13">
-<script src="/static/i18n.js?v=1"></script>
+<script src="/static/i18n.js?v=2"></script>
 </head>
 <body>
 <!-- sprite sheet injected here at load so <use href="#sym"> resolves -->
@@ -28,6 +28,7 @@
   <div class="setup">
     <a class="btn btn-ghost" href="/" data-i18n="nav.play">▸ Play</a>
     <a class="btn btn-ghost" href="/rules" data-i18n="nav.rules" data-i18n-title="nav.rules_t">Rules ?</a>
+    <a class="btn btn-ghost" href="/protocol" data-i18n="nav.protocol" data-i18n-title="nav.protocol_t">Protocol ⌘</a>
     <div data-lang-switch></div>
   </div>
 </header>
@@ -54,6 +55,7 @@
       against <b>random</b>, and — if it passes — becomes your active entry. Use the
       bundled SDK (<code>starship_sdk</code> / <code>starship_bot.hpp</code>) or speak
       the JSON protocol directly.</p>
+    <p class="hint"><a href="/protocol" data-i18n="t.protocol_link">→ Full bot protocol reference (request/reply JSON, time limits)</a></p>
     <div class="uploader">
       <input type="file" id="sub-file" accept=".py,.cpp,.cc,.cxx">
       <button class="btn btn-primary" id="sub-upload"><svg width="16" height="16" style="vertical-align:-3px;margin-right:6px"><use href="#tour-upload"/></svg><span data-i18n="t.submit_btn">Submit bot</span></button>
