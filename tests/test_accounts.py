@@ -20,7 +20,7 @@ from starship_duel.tournament.accounts import (
     static_scan,
     verify_password,
 )
-from starship_duel.tournament.registry import BotRegistry
+from starship_duel.tournament.registry import BASELINES, BotRegistry
 from starship_duel.tournament.schedule import register_competitors
 from starship_duel.tournament.store import TournamentStore
 
@@ -277,6 +277,46 @@ class TestAuthApi(unittest.TestCase):
         subs = self.client.get("/api/submissions").json()["submissions"]
         self.assertTrue(any(s["active"] and s["status"] == "validated" for s in subs))
         self.assertIn("dave", self.server.TOURNEY_BOTS.bot_ids())
+
+    def _upload_as(self, user):
+        self._login("admin", "adminpw")
+        self.client.post("/api/admin/users", json={"username": user, "password": "pw"})
+        self.client.post("/api/logout")
+        self._login(user, "pw")
+        return self.client.post(
+            "/api/submissions",
+            files={"file": ("bot.py", _EXAMPLE_BOT.read_bytes(), "text/x-python")})
+
+    def test_upload_auto_queues_baseline_matches(self):
+        r = self._upload_as("erin").json()
+        self.assertEqual(r["status"], "validated", r)
+        # Queued, not played: the request only appends rows for the workers.
+        self.assertEqual(r["queued"], len(BASELINES) * self.server.AUTOEVAL_GAMES)
+        counts = self.server.TOURNEY.status_counts()
+        self.assertEqual(counts.get("pending"), r["queued"])
+        self.assertEqual(counts.get("running", 0) + counts.get("done", 0), 0)
+        rows = self.server.TOURNEY.list_matches(limit=500)
+        self.assertTrue(all(m["a_id"] == "erin" and m["b_id"] in BASELINES for m in rows))
+
+        # Re-uploading replaces the queue instead of growing it.
+        again = self.client.post(
+            "/api/submissions",
+            files={"file": ("bot.py", _EXAMPLE_BOT.read_bytes(), "text/x-python")}).json()
+        self.assertEqual(again["queued"], r["queued"])
+        self.assertEqual(self.server.TOURNEY.pending_count(), r["queued"])
+
+    def test_autoeval_backs_off_when_queue_is_deep(self):
+        self.server.TOURNEY.add_matches([("a", "b", 0, i) for i in range(5)])
+        old = self.server.AUTOEVAL_MAX_PENDING
+        self.server.AUTOEVAL_MAX_PENDING = 5
+        try:
+            r = self._upload_as("frank").json()
+        finally:
+            self.server.AUTOEVAL_MAX_PENDING = old
+        # Still a good submission — just nothing added on top of a saturated queue.
+        self.assertEqual(r["status"], "validated", r)
+        self.assertEqual(r["queued"], 0)
+        self.assertEqual(self.server.TOURNEY.pending_count(), 5)
 
     def test_upload_requires_login(self):
         r = self.client.post("/api/submissions",

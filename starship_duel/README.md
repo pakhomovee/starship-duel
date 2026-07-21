@@ -329,6 +329,17 @@ Plus the **baselines** (`random`, `heuristic`, `hunter`, `uppo-easy`,
 `uppo-medium`, `uppo`) that every ladder includes — the during-contest "partial
 standings" opponents.
 
+A validated upload **auto-queues its own baseline evaluation**
+(`enqueue_baselines_for_bot`), so a competitor gets a placing without an admin
+scheduling anything; the bulk endpoints below stay for backfills and the final
+round robin. Auto-eval only ever *appends to the queue* — the games are played by
+the workers, so throughput (and CPU) is set by `worker --workers N`, not by how
+often people submit. It schedules one bot vs the baselines, never the O(bots²)
+round robin; a resubmission **replaces** that bot's matches (same competitor id,
+so the previous version's results would otherwise keep scoring under the current
+name); and past `$STARSHIP_AUTOEVAL_MAX_PENDING` queued matches it backs off.
+Tune with `$STARSHIP_AUTOEVAL` / `_GAMES` / `_MAX_PENDING`.
+
 ```bash
 # schedule participant-vs-baseline matches (partial standings) — admin endpoint,
 # or from Python: tournament.schedule.enqueue_baselines(store, n_each=10)

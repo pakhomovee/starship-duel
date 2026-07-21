@@ -138,6 +138,28 @@ class TournamentStore:
             )
         return len(payload)
 
+    def purge_matches(self, cid: str, *, statuses: Optional[Sequence[str]] = None) -> int:
+        """Delete matches involving ``cid``. Returns rows removed.
+
+        Used when a competitor's code is replaced (a resubmission): the old
+        version's results would otherwise keep scoring under the same id, and its
+        queued matches would burn worker time on code nobody is running any more.
+        Deleting a *running* row is safe -- the worker's finish/fail update simply
+        matches nothing.  Replays live in the separate games DB and are untouched.
+        """
+        q = "DELETE FROM matches WHERE (a_id=? OR b_id=?)"
+        args: list = [cid, cid]
+        if statuses:
+            q += " AND status IN (%s)" % ",".join("?" * len(statuses))
+            args += list(statuses)
+        with self._lock, self._connect() as conn:
+            return conn.execute(q, args).rowcount
+
+    def pending_count(self) -> int:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM matches WHERE status='pending'").fetchone()[0]
+
     def count_pair(self, a_id: str, b_id: str) -> int:
         """Matches already scheduled for this *ordered* pair (any status)."""
         with self._connect() as conn:

@@ -216,8 +216,14 @@ async function uploadBot() {
   fd.append("file", f, f.name);
   try {
     const r = await api("/api/submissions", { method: "POST", body: fd });
+    // A validated upload auto-queues its baseline matches; tell the author how
+    // many, so the standings not moving yet doesn't read as a failure.
+    // null/absent means auto-eval is switched off server-side — say nothing.
+    let queued = "";
+    if (r.status === "validated" && r.queued != null)
+      queued = r.queued ? t("t.queued_eval", { n: r.queued }) : t("t.queued_busy");
     out.textContent = (r.status === "validated" ? "✓ " : "✗ ") + (T.has("t.status_" + r.status) ? t("t.status_" + r.status) : r.status) +
-      (r.message ? " — " + r.message : "");
+      (r.message ? " — " + r.message : "") + queued;
     out.className = "sub-result " + (r.status === "validated" ? "ok" : "bad");
     loadMySubmissions();
     loadStandings();

@@ -38,6 +38,7 @@ from ..tournament import BotRegistry, TournamentStore
 from ..tournament.accounts import AccountStore, smoke_test, static_scan
 from ..tournament.schedule import (
     enqueue_baselines,
+    enqueue_baselines_for_bot,
     enqueue_full_round_robin,
     register_competitors,
 )
@@ -96,6 +97,24 @@ ACCOUNTS = AccountStore()
 TOURNEY_BOTS = BotRegistry(account_store=ACCOUNTS)
 SESSION_COOKIE = "sd_session"
 MAX_SUBMISSIONS_PER_DAY = int(os.environ.get("STARSHIP_MAX_SUBMISSIONS_PER_DAY", "20"))
+
+# --------------------------------------------------------------------------- #
+# automatic evaluation of a fresh submission                                  #
+# --------------------------------------------------------------------------- #
+# A validated upload queues its own baseline matches, so a competitor gets a
+# placing without an admin pressing "schedule".  Three things keep this off the
+# CPU's back:
+#   * it only ever *enqueues* -- the games are played by the separate worker
+#     processes, so concurrency stays pinned to `worker --workers N`;
+#   * it schedules one bot vs the baselines (6 x N matches), never the O(bots^2)
+#     round robin, and N here is smaller than the admin default;
+#   * a resubmission replaces that bot's queued matches instead of adding to
+#     them, so repeat uploads can't stack up depth (see enqueue_baselines_for_bot).
+# AUTOEVAL_MAX_PENDING is the backstop: past that queue depth the workers are
+# already saturated, so we skip rather than pile on and tell the author.
+AUTOEVAL = os.environ.get("STARSHIP_AUTOEVAL", "1").lower() not in ("0", "false", "no")
+AUTOEVAL_GAMES = int(os.environ.get("STARSHIP_AUTOEVAL_GAMES", "4"))
+AUTOEVAL_MAX_PENDING = int(os.environ.get("STARSHIP_AUTOEVAL_MAX_PENDING", "1000"))
 
 # Seed an initial admin so the tournament is manageable out of the box. Set both
 # env vars once; thereafter the admin creates the rest of the accounts.
@@ -449,11 +468,36 @@ def admin_list_users(request: Request):
     return {"users": ACCOUNTS.list_users()}
 
 
+def _autoeval(bot_id: str) -> Optional[int]:
+    """Queue the baseline evaluation for a just-validated bot.
+
+    Returns the number of matches queued, 0 if the queue was too deep to add
+    more, or None when auto-eval is switched off entirely -- the caller reports
+    those three cases differently.
+
+    Never raises: a scheduling hiccup must not turn a good upload into a failed
+    one, since the admin schedule endpoint can always top the queue up later.
+    """
+    if not AUTOEVAL:
+        return None
+    try:
+        pending = TOURNEY.pending_count()
+        if pending >= AUTOEVAL_MAX_PENDING:
+            _pkg_log.warning("auto-eval skipped for %s: %d matches already pending "
+                             "(cap %d)", bot_id, pending, AUTOEVAL_MAX_PENDING)
+            return 0
+        return enqueue_baselines_for_bot(TOURNEY, bot_id, n_each=AUTOEVAL_GAMES)
+    except Exception:
+        _pkg_log.exception("auto-eval scheduling failed for %s", bot_id)
+        return 0
+
+
 @app.post("/api/submissions")
 async def upload_submission(request: Request, file: UploadFile = File(...)):
     """Upload a single-file bot: static-scan, smoke-test vs random, and (on pass)
-    make it this user's active competitor. Synchronous so authors get instant
-    feedback."""
+    make it this user's active competitor and queue its baseline evaluation.
+    Synchronous so authors get instant feedback -- but only the scan and the one
+    smoke game run here; the evaluation itself is left to the match workers."""
     u = _require_user(request)
     if ACCOUNTS.recent_submission_count(u["id"], 24 * 3600) >= MAX_SUBMISSIONS_PER_DAY:
         raise HTTPException(429, f"daily submission limit reached ({MAX_SUBMISSIONS_PER_DAY})")
@@ -474,7 +518,9 @@ async def upload_submission(request: Request, file: UploadFile = File(...)):
     # Surface the freshly-activated bot to the match registry + competitor list.
     TOURNEY_BOTS.reload()
     register_competitors(TOURNEY, TOURNEY_BOTS)
-    return {"id": sub_id, "status": "validated", "message": msg, "active": True}
+    queued = _autoeval(u["username"])
+    return {"id": sub_id, "status": "validated", "message": msg, "active": True,
+            "queued": queued}
 
 
 @app.get("/api/submissions")

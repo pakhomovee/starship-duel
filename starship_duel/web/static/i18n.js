@@ -186,6 +186,10 @@ const STR = {
   "t.status_rejected": ["rejected", "отклонён"],
   "t.status_pending": ["pending", "в очереди"],
   "t.active_suffix": [" · active", " · активный"],
+  "t.queued_eval": [" — {n} evaluation matches queued; standings update as they finish.",
+    " — в очередь поставлено матчей: {n}; таблица обновится по мере их завершения."],
+  "t.queued_busy": [" — the match queue is busy; your games will be scheduled shortly.",
+    " — очередь матчей загружена; ваши игры будут запланированы чуть позже."],
 
   "t.login": ["Log in", "Войти"],
   "t.logout": ["Log out", "Выйти"],

@@ -244,6 +244,13 @@ The web unit binds `127.0.0.1:8000` only and runs a **single** uvicorn process
 (game state is in-memory — don't add `--workers`). Scale the *worker* unit's
 `--workers` instead.
 
+The worker unit is not optional: every validated submission auto-queues its
+baseline matches (`STARSHIP_AUTOEVAL*` in `starship.env.example`), and with no
+worker running that queue just grows and nobody gets a placing. The worker's
+`--workers` count is what actually sets tournament CPU use — uploads only append
+rows. Budget roughly one worker per spare core, and keep at least one core for
+the web unit, which still runs a smoke game inline on every upload.
+
 ## 6. Caddy (TLS reverse proxy)
 
 ```sh

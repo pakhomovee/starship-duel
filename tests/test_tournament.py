@@ -12,6 +12,7 @@ import pytest
 from starship_duel.tournament.registry import BASELINES, BotRegistry
 from starship_duel.tournament.schedule import (
     enqueue_baselines,
+    enqueue_baselines_for_bot,
     enqueue_full_round_robin,
     register_competitors,
 )
@@ -126,6 +127,46 @@ def test_scheduling_is_balanced_and_idempotent(store):
 
     added_full = enqueue_full_round_robin(store, n_each=10)
     assert added_full == 3 * 10                            # C(3,2)=3 pairs x 10
+
+
+def test_per_bot_schedule_touches_only_that_bot(store):
+    store.add_competitor("alice", "bot")
+    store.add_competitor("bob", "bot")
+    enqueue_baselines_for_bot(store, "bob", n_each=4)
+
+    added = enqueue_baselines_for_bot(store, "alice", n_each=4)
+    assert added == len(BASELINES) * 4                     # baselines only, no bob
+    rows = [r for r in store.list_matches(limit=1000) if r["a_id"] == "alice"]
+    assert len(rows) == added
+    assert {r["b_id"] for r in rows} == set(BASELINES)
+    # Balanced first-mover, same as the bulk schedules.
+    per_pair = [r for r in rows if r["b_id"] == "heuristic"]
+    assert sum(r["first_mover"] for r in per_pair) == 2
+
+    # Scheduling alice again leaves bob's queue untouched.
+    assert len([r for r in store.list_matches(limit=1000) if r["a_id"] == "bob"]) == len(BASELINES) * 4
+
+
+def test_resubmission_replaces_rather_than_stacking(store):
+    store.add_competitor("alice", "bot")
+    n = len(BASELINES) * 4
+    assert enqueue_baselines_for_bot(store, "alice", n_each=4) == n
+
+    # Finish one and leave the rest pending, then "resubmit".
+    done = store.list_matches(status="pending", limit=1)[0]
+    store.finish_match(done["id"], 0, "fire_hit", None)
+    assert enqueue_baselines_for_bot(store, "alice", n_each=4) == n
+
+    # The old version's results are gone and the queue hasn't grown: a repeat
+    # uploader can't accumulate work for the match workers.
+    rows = store.list_matches(limit=1000)
+    assert len(rows) == n
+    assert all(r["status"] == "pending" for r in rows)
+    assert store.results_for_scoring() == []
+
+    # Opting out of the reset tops up instead (idempotent, like the bulk path).
+    assert enqueue_baselines_for_bot(store, "alice", n_each=4, reset=False) == 0
+    assert enqueue_baselines_for_bot(store, "alice", n_each=6, reset=False) == len(BASELINES) * 2
 
 
 # ------------------------------------------------------------------ scoring --

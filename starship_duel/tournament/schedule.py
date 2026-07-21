@@ -1,14 +1,23 @@
 """Fill the match queue.
 
-Two schedules:
+Three schedules:
   * :func:`enqueue_baselines` -- every active participant bot vs each of the 4
     baselines, N games each with balanced first-mover.  Cheap and continuous;
     drives the during-contest partial standings.
+  * :func:`enqueue_baselines_for_bot` -- the same, for a *single* competitor.
+    Fired automatically when a submission validates, so authors get a placing
+    without an admin pressing anything.
   * :func:`enqueue_full_round_robin` -- every active-bot *pair*, N games each,
     balanced first-mover.  ~C(bots, 2) x N matches; the post-deadline full eval.
 
-Both are **idempotent**: they only top a pair up to N games, so re-running after
-adding a competitor (or bumping N) schedules just the missing matches.
+The two bulk schedules are **idempotent**: they only top a pair up to N games, so
+re-running after adding a competitor (or bumping N) schedules just the missing
+matches.  The per-bot one instead *replaces* that bot's matches by default,
+because its trigger is the arrival of new code under an existing name.
+
+Nothing here plays a game -- these only append rows to the queue.  Throughput
+(and therefore CPU) is set by how many :mod:`starship_duel.tournament.worker`
+processes are draining it, not by how fast matches are scheduled.
 """
 
 from __future__ import annotations
@@ -47,6 +56,27 @@ def enqueue_baselines(store: TournamentStore, *, n_each: int = 10) -> int:
         for base in BASELINES:
             already = store.count_pair(bot, base)
             rows += _balanced_rows(bot, base, n_each, already, seed_base=hash((bot, base)) % 1_000_000)
+    return store.add_matches(rows)
+
+
+def enqueue_baselines_for_bot(store: TournamentStore, bot_id: str, *, n_each: int = 4,
+                              reset: bool = True) -> int:
+    """Schedule one bot's baseline evaluation. Returns rows added.
+
+    This is the auto-evaluation a fresh submission triggers, so it stays
+    deliberately small: *one* competitor against the baselines only, never the
+    all-pairs round robin.  With ``reset`` (the default) the bot's existing
+    matches are purged first -- a resubmission supersedes the previous version
+    rather than topping up its row count, which both keeps the standings honest
+    and stops repeat uploads from stacking queue depth.
+    """
+    rows: List[Tuple[str, str, int, int]] = []
+    if reset:
+        store.purge_matches(bot_id)
+    for base in BASELINES:
+        already = 0 if reset else store.count_pair(bot_id, base)
+        rows += _balanced_rows(bot_id, base, n_each, already,
+                               seed_base=hash((bot_id, base)) % 1_000_000)
     return store.add_matches(rows)
 
 
